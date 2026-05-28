@@ -1,0 +1,21 @@
+{
+  "name": "ai-web-skill",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hiennguyenkim/web-skill.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/hiennguyenkim/web-skill/issues"
+  },
+  "homepage": "https://github.com/hiennguyenkim/web-skill#readme"
+}

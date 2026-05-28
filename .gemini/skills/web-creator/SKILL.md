@@ -127,11 +127,26 @@ Read and display a formatted summary of `STATE.md` and the next tasks on `ROADMA
   - Identify root causes, construct a patch, and execute automatic edits to repair the files.
   - Document the issue and the applied fixes under the validation log in `STATE.md`.
 
+## 🤖 MULTI-AGENT COLLABORATION LIFECYCLE (crewAI & MetaGPT Style)
+To build a highly robust, flawless web application, you must treat your execution phases as a collaborative, multi-agent organization. Assign role play personas with strict input/output protocols:
+1. **Product Manager & Architect**: Creates the initial specifications, map codebase files, and outputs the detailed layout blueprints in `PROJECT.md`.
+2. **UI/UX Designer (Persona 1)**: Consumes the PM specs, generates raw styling parameters and images, and updates `PROJECT.md` with active design tokens. Must hand off these specs before Coder starts.
+3. **Creative Frontend Coder (Persona 2)**: Consumes the UI design tokens, codes semantic HTML structure with unique element IDs, and writes the core JS logic modules. Must assign clean IDs and classes before CSS Architect starts.
+4. **Responsive CSS Architect (Persona 3)**: Consumes the HTML structure and IDs, translates them into modular Vanilla CSS, writes responsive media queries, scrollbars, and keyframe animations in `index.css`.
+5. **QA Engineer (Persona 4)**: Consumes the HTML and CSS codebase, triggers automated Playwright test verification scripts, checks accessibility/contrast, and writes `walkthrough.md`.
+
+## 🔄 AUTONOMOUS SANDBOX DIAGNOSTIC LOOP (OpenHands Style)
+If the QA verification runs or console logs fail at any point (exit code is not 0), enter this self-healing execution loop immediately:
+1. **Traceback Extraction**: Read the error logs, syntax warning messages, and terminal outputs.
+2. **Diagnostic Analysis**: Locate the file, line number, or CSS rule causing the failure.
+3. **Safe Patching**: Apply direct, surgical edits to resolve the error. Never rewrite the entire file.
+4. **Sandbox Re-Test**: Run the test script again. Repeat this patch-and-test loop up to 3 times. If the issue remains unresolved, stop and query the user.
+
 ---
 
 ## 🧪 DIAGNOSTICS & TESTING GUARD
 - **Diagnostic Reference**: Before creating or editing code, read the diagnostic checklist in [references/diagnostics.md](references/diagnostics.md) to prevent asset fails, style fails, viewport issues, and script crashes.
-- **Automated Playwright Verification**: In Phase 5, generate a local test script based on [playwright-template.js](templates/playwright-template.js) and run it using Playwright. Use it to load the page in a headless browser, verify there are no console errors, and save a full-page verification screenshot in the `assets/` folder. If tests fail, run `/web-creator forensics` to fix the code automatically.
+- **Advanced Automated Playwright Verification**: In Phase 5, generate a local test script `verify-ui.js` based on [playwright-template.js](templates/playwright-template.js) and run it using Playwright. The script will dynamically download its own environment dependencies (Playwright package and chromium binary) headlessly, run tests across multiple viewports (Desktop & Mobile), check for layout overflow, gather DOM load times/TTFB performance statistics, and generate a beautiful glassmorphic HTML test report at `assets/test_report.html` alongside captured screenshots. If tests or layout audits fail, immediately run `/web-creator forensics` to diagnose and auto-repair.
 - **Console Check**: Always test scripts to ensure there are no unhandled exceptions in the web console.
 - **CSS Validation**: Inspect layouts for horizontal scrollbar issues, clipping, or overlapping text.
 - **State Validation**: Ensure elements have hover states, buttons have active states, and inputs have focus rings.
