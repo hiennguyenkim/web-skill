@@ -64,7 +64,13 @@ python cli.py serve --port 8000
 - Truy cập tài liệu tương tác Swagger API tại: `http://localhost:8000/docs`
 - API hỗ trợ các cổng: `/api/project/init`, `/api/project/build/{id}`, `/api/project/{id}/status`, và `/api/project/forensics/{id}`.
 
-### 3. Khởi chạy máy chủ MCP (Model Context Protocol)
+### 3. Khởi chạy Celery Background Worker
+Đảm bảo bạn đã khởi chạy dịch vụ **Redis** trên máy local (mặc định tại `redis://localhost:6379/0`), sau đó khởi chạy Celery worker:
+```bash
+python cli.py worker
+```
+
+### 4. Khởi chạy máy chủ MCP (Model Context Protocol)
 Chia sẻ các công cụ của Web Creator tới các AI Client hỗ trợ MCP (như Claude Desktop, Cursor, v.v.) qua giao tiếp STDIO:
 ```bash
 python cli.py mcp
@@ -80,8 +86,11 @@ python cli.py mcp
 # Xây dựng Docker Image
 docker build -t web-creator-platform .
 
-# Chạy Docker Container
+# Chạy Web Server bằng Docker
 docker run -p 8000:8000 --env-file .env web-creator-platform
+
+# Chạy Celery Background Worker bằng Docker
+docker run --env-file .env web-creator-platform python3 cli.py worker
 ```
 
 ---

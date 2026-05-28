@@ -30,6 +30,9 @@ def main():
     # MCP STDIO runner
     mcp_parser = subparsers.add_parser("mcp", help="Run STDIO MCP Server")
 
+    # Celery worker runner
+    subparsers.add_parser("worker", help="Run Celery Background Worker")
+
     # Direct build runner
     build_parser = subparsers.add_parser("build", help="Run a direct local build task")
     build_parser.add_argument("name", type=str, help="Name of your web app")
@@ -46,6 +49,11 @@ def main():
         print("🚀 Starting Web Creator MCP Server over STDIO...")
         from app.mcp.server import mcp
         mcp.run("stdio")
+
+    elif args.command == "worker":
+        print("🚀 Starting Celery background worker...")
+        from app.worker import celery_app
+        celery_app.worker_main(argv=["worker", "--loglevel=info"])
 
     elif args.command == "build":
         asyncio.run(run_cli_build(name=args.name, concept=args.concept, workspace=args.workspace))

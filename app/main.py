@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 import datetime
@@ -7,6 +7,7 @@ from app.db.database import engine, Base, get_db
 from app.db.models import Project, BuildTask, TestRun
 from app.agents.coordinator import AgentCoordinator
 from sqlalchemy.orm import Session
+from app.worker import build_project_task
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
@@ -50,15 +51,18 @@ async def init_project(req: ProjectInitReq):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/project/build/{project_id}")
-async def build_project(project_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def build_project(project_id: str, db: Session = Depends(get_db)):
     db_project = db.query(Project).filter(Project.id == project_id).first()
     if not db_project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Run the build asynchronously in the background
-    coordinator = AgentCoordinator(workspace_path=db_project.workspace_path)
-    background_tasks.add_task(coordinator.build_project, project_id)
-    return {"status": "BUILDING", "project_id": project_id}
+    # Queue the build task via Celery
+    build_project_task.delay(project_id, db_project.workspace_path)
+    
+    # Update project status in DB to indicate it is queued
+    db_project.status = "QUEUED"
+    db.commit()
+    return {"status": "QUEUED", "project_id": project_id}
 
 @app.get("/api/project/{project_id}/status", response_model=ProjectStatusResponse)
 async def get_project_status(project_id: str, db: Session = Depends(get_db)):
