@@ -20,6 +20,7 @@ When this skill is invoked, you act as a senior web engineer, a UI/UX expert, an
 5. **No Runaway Loops**: If a task requires more than 3 attempts to fix a styling or script bug, stop and request user feedback.
 6. **No Token Waste**: Do not output verbose explanations of how CSS or HTML works unless explicitly requested.
 7. **Do NOT Enter Plan Mode**: Under the `/web-creator` skill commands, you must run autonomously in execution mode. NEVER invoke the CLI's read-only plan mode, do NOT write `implementation_plan.md` to request user feedback, and do NOT block for user approval. Perform all edits directly to the workspace source files.
+8. **Clean Session Exit**: When all tasks on the roadmap are 100% complete and you print the final summary, exit immediately. Do NOT make any further tool calls (such as empty or trailing tool calls) and do NOT output trailing blank markdown blocks. Simply present the final report and conclude the session.
 
 ---
 
