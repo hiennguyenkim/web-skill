@@ -17,7 +17,9 @@ COPY requirements.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy application source code
-COPY app/ ./app/
+COPY core/ ./core/
+COPY skills/ ./skills/
+COPY apps/ ./apps/
 COPY cli.py ./
 
 # Expose port for FastAPI server

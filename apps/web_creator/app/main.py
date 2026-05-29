@@ -85,6 +85,54 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "role": current_user.role
     }
 
+@app.get("/api/health")
+async def health_check(db: Session = Depends(get_db)):
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "services": {
+            "database": "unknown",
+            "redis": "unknown",
+            "llm": "configured"
+        }
+    }
+    
+    # 1. Check database connection
+    try:
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
+        health_status["services"]["database"] = "healthy"
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["services"]["database"] = f"unhealthy: {str(e)}"
+        
+    # 2. Check Redis connection
+    import redis
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    try:
+        r = redis.Redis.from_url(redis_url, socket_connect_timeout=2)
+        r.ping()
+        health_status["services"]["redis"] = "healthy"
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["services"]["redis"] = f"unhealthy: {str(e)}"
+        
+    # 3. Check LLM API key
+    provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    if provider == "deepseek":
+        key = os.getenv("DEEPSEEK_API_KEY")
+    else:
+        key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        
+    if not key:
+        health_status["status"] = "unhealthy"
+        health_status["services"]["llm"] = "unconfigured (missing API key)"
+        
+    if health_status["status"] == "unhealthy":
+        raise HTTPException(status_code=503, detail=health_status)
+        
+    return health_status
+
 # === BUILD PROJECT SCHEMAS & ENDPOINTS ===
 
 class ProjectInitReq(BaseModel):

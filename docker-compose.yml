@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: web_creator_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  web:
+    build: .
+    container_name: web_creator_server
+    command: python3 cli.py serve --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:///d:/ai-web-skill/web_creator.db
+      - LLM_PROVIDER=gemini
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - redis
+    restart: always
+
+  worker:
+    build: .
+    container_name: web_creator_worker
+    command: python3 cli.py worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:///d:/ai-web-skill/web_creator.db
+      - LLM_PROVIDER=gemini
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - redis
+    restart: always
