@@ -12,10 +12,39 @@ When this skill is invoked, you act as a senior web engineer, a UI/UX expert, an
 
 ---
 
+## 📋 MANDATORY FIRST STEP — READ PROJECT REQUIREMENTS
+
+> **CRITICAL**: Before executing ANY command or writing ANY code, you MUST perform this requirement extraction step. Skipping this step is a HARD VIOLATION.
+
+### Step 0: Auto-Detect & Deep-Read Requirements File
+
+At the very start of every session, before touching any code or template:
+
+1. **Scan the workspace directory** for any `.docx` files (e.g. `yeucau.docx`, `requirements.docx`, `specs.docx`). Use `Get-ChildItem -Path . -Filter *.docx -Recurse` (Windows) or `find . -name '*.docx'` to locate them.
+2. **If a `.docx` file is found**:
+   - Execute `python scripts/docx_to_txt.py <path_to_docx>` to extract full text.
+   - **Read and analyze the ENTIRE extracted text** line by line. Do NOT skim or summarize prematurely.
+   - Extract and document ALL of the following from the requirement text:
+     - 🏷️ **Project name & brand identity** (logo, slogan, colors mentioned)
+     - 🎯 **Target audience** (who will use the site)
+     - 📄 **All pages/sections required** (list every page, section, and component explicitly named)
+     - 🖼️ **Visual requirements** (colors, fonts, imagery style, mood/tone)
+     - ⚙️ **Functional requirements** (forms, filters, carts, APIs, interactions)
+     - 📦 **Content inventory** (product names, service descriptions, pricing, testimonials, team members, etc.)
+     - 🔗 **Navigation structure** (menu items, links, CTAs)
+     - 📱 **Responsive/device requirements**
+     - 🌐 **Language** (Vietnamese, English, or multilingual)
+   - Store all extracted data in `PROJECT.md` under a `## 📋 Requirements Analysis` section.
+   - **Do NOT proceed** until every item from the `.docx` is captured in `PROJECT.md`.
+3. **If no `.docx` file is found**: Check for `.txt`, `.md`, or inline text concept. If still none, use the user's message as the concept and default to SaaS/Tech preset.
+4. **Verification**: After extraction, output a brief confirmation: *"✅ Requirements loaded from `[filename]`: [N] pages, [key features], [theme]".* Then and only then proceed to the next phase.
+
+---
+
 ## 🛑 HARD RULES — NEVER VIOLATE
 1. **No Plain/Boring Designs**: Every website must look like a premium SaaS or modern portfolio. Use curated HSL color schemes, dark modes, gradients, glassmorphism, Outfit/Inter google fonts, and transition properties (`transition: all 0.3s ease-in-out`).
 2. **No Placeholders**: Never use placeholder images or dummy lorem ipsum text. Generate high-quality assets using the `generate_image` tool, and write compelling, copywriter-level text content.
-3. **No Tailwind CSS**: Use modern Vanilla CSS (CSS Grid, Flexbox, variables) unless the user explicitly requests Tailwind.
+3. **No Tailwind CSS & Separate CSS/HTML**: Use modern Vanilla CSS (CSS Grid, Flexbox, variables) unless the user explicitly requests Tailwind. All CSS styles must be written in separate stylesheets (e.g. `public/css/style.css`, `public/css/dashboard.css`). Never write inline styles or use `<style>` blocks in HTML views; HTML and CSS must be kept completely separated.
 4. **GSD Memory Lock**: Always externalize state. Keep `PROJECT.md`, `ROADMAP.md`, and `STATE.md` updated. Never rely on chat history for project status.
 5. **No Runaway Loops**: If a task requires more than 3 attempts to fix a styling or script bug, stop and request user feedback.
 6. **No Token Waste**: Do not output verbose explanations of how CSS or HTML works unless explicitly requested.
@@ -29,25 +58,27 @@ When this skill is invoked, you act as a senior web engineer, a UI/UX expert, an
 ### 1. `/web-creator build [concept]` (End-to-End Automatic Build — RECOMMENDED)
 Execute the entire web creation workflow from specification to final deployment in a single command.
 - **Action**: Run the complete pipeline autonomously:
-  1. **Initialization**: Read the `[concept]` (supports `.docx` files or text) and check for existing files. Set up `PROJECT.md`, `ROADMAP.md`, and `STATE.md` with zero placeholders.
-  2. **Autonomous Execution**: Loop through every single task in `ROADMAP.md` sequentially. For each task, automatically invoke the correct developer/designer persona, generate/modify code files, and execute `generate_image` for web assets.
+  0. **⚠️ REQUIREMENTS FIRST**: Execute **Step 0** (Auto-Detect & Deep-Read Requirements File) above BEFORE anything else. If `[concept]` is a `.docx` path, use it directly. Otherwise scan the workspace for any `.docx` file first. Only after full extraction does the pipeline continue.
+  1. **Initialization**: Using the fully-extracted requirements from Step 0, check for existing files. Set up `PROJECT.md`, `ROADMAP.md`, and `STATE.md` with zero placeholders — every field must reflect the actual project data from the requirements file.
+  2. **Autonomous Execution**: Loop through every single task in `ROADMAP.md` sequentially. For each task, automatically invoke the correct developer/designer persona, generate/modify code files (both frontend HTML/CSS/JS and backend Express.js server, Mongoose models, routes, and controllers), and execute `generate_image` for web assets.
   3. **Self-Correction**: Test and review files for console errors or style clipping. If errors are found, fix them immediately.
   4. **Progress Tracking**: Keep updating `STATE.md` and check off items in `ROADMAP.md`.
   5. **Polish & Completion**: Run SEO auditing, WCAG contrast checks, write `walkthrough.md`, and stop once the project is 100% complete.
 
 ### 2. `/web-creator init [concept]` (Initialize Project)
 Initialize the project structure.
-- **Action**: Analyze the project `[concept]`.
-  - **If `[concept]` is a `.docx` file** (e.g. `specs.docx` or `d:\BeautyStore\instructions.docx`): Execute `python scripts/docx_to_txt.py [concept]` (or absolute path) to extract the text content of the Word document first. Use that text as the project requirement.
+- **Action**: Execute **Step 0** (Auto-Detect & Deep-Read Requirements File) first.
+  - **If `[concept]` is a `.docx` file** (e.g. `specs.docx`, `yeucau.docx`, or `d:\BeautyStore\instructions.docx`): Use it as the target for Step 0.
+  - **If no `[concept]` given**: Scan workspace for any `.docx` file automatically, extract it via Step 0.
   - **Otherwise**: Use the text string provided as the concept.
 - **Existing Code/UI Analysis**: Check the workspace for existing files (e.g., HTML, CSS, JS).
   - **If existing files exist**: Do NOT overwrite them. Read their code to extract the existing UI structure and design tokens. Fill `PROJECT.md` to document the current theme/layout, and customize the `ROADMAP.md` tasks to build *upon* and refine the existing skeleton.
-  - **If directory is empty**: Detect the closest aesthetic preset from the **Aesthetic Theme Presets** matrix below based on the requirement text, copy templates, and write new boilerplate files.
+  - **If directory is empty**: Detect the closest aesthetic preset from the **Aesthetic Theme Presets** matrix below based on the fully-extracted requirement text, copy templates, and write new boilerplate files.
 - Copy templates into the project root:
   - Create `PROJECT.md` from [project-template.md](templates/project-template.md)
   - Create `ROADMAP.md` from [roadmap-template.md](templates/roadmap-template.md)
   - Create `STATE.md` from [state-template.md](templates/state-template.md)
-- **Automatic Selection**: Instantly populate `PROJECT.md` and `ROADMAP.md` with the preset design parameters (fonts, color variables, surface style, and layout structure) or the extracted existing theme parameters. Replace all placeholders with realistic data.
+- **Automatic Selection**: Instantly populate `PROJECT.md` and `ROADMAP.md` with **all data extracted from the requirements file** (page list, features, colors, content). Replace ALL placeholders with realistic data from the `.docx` — never invent content that contradicts the requirements.
 - **No Clarifying Questions**: The selection is done fully automatically. If no concept is specified and the folder is empty, default to the **SaaS / Tech** preset.
 
 ### 2. `/web-creator plan` (Finalize Specifications)
@@ -92,7 +123,11 @@ Before starting, read `STATE.md` to identify the active task. Then, switch to th
 - **Prompt**: *"Act as a Responsive CSS Expert. Build responsive layouts using CSS Grid and Flexbox. Create custom gradients, custom scrollbars, glassmorphic surface effects, hover scaling, and keyframe animations (@keyframes fadeIn, slideUp). Avoid using Tailwind unless requested."*
 - **Action**: Write and refine styles in `index.css`.
 
-#### 🚀 Persona 4: SEO & QA Specialist (Phase 5)
+#### ⚙️ Persona 5: Full-Stack Backend Developer (Phase 4)
+- **Prompt**: *"Act as a Senior Backend and Database Developer. Write standard Mongoose database schemas, Express routes, controller functions with complete business logic, and server.js config. Ensure proper database connection setup and configure package.json dependencies."*
+- **Action**: Code Express routes, controllers, models, database configs, and server setup.
+
+#### 🚀 Persona 4: SEO & QA Specialist (Phase 6)
 - **Prompt**: *"Act as an SEO and QA Specialist. Audit the website for accessibility (WCAG AA contrast, focus indicators), check for console errors, optimize title/meta tags, ensure there is exactly one <h1>, and prepare the walkthrough.md report."*
 - **Action**: Perform final checks and audit.
 
@@ -134,7 +169,8 @@ To build a highly robust, flawless web application, you must treat your executio
 2. **UI/UX Designer (Persona 1)**: Consumes the PM specs, generates raw styling parameters and images, and updates `PROJECT.md` with active design tokens. Must hand off these specs before Coder starts.
 3. **Creative Frontend Coder (Persona 2)**: Consumes the UI design tokens, codes semantic HTML structure with unique element IDs, and writes the core JS logic modules. Must assign clean IDs and classes before CSS Architect starts.
 4. **Responsive CSS Architect (Persona 3)**: Consumes the HTML structure and IDs, translates them into modular Vanilla CSS, writes responsive media queries, scrollbars, and keyframe animations in `index.css`.
-5. **QA Engineer (Persona 4)**: Consumes the HTML and CSS codebase, triggers automated Playwright test verification scripts, checks accessibility/contrast, and writes `walkthrough.md`.
+5. **Full-Stack Backend Developer (Persona 5)**: Consumes the architectural specs, implements Mongoose models, Express API routes, controller logic, and database configuration, and configures the main `server.js` startup file. Integrates frontend forms and fetch endpoints with the API routes.
+6. **QA Engineer (Persona 4)**: Consumes the HTML, CSS, and Backend codebase, triggers automated Playwright test verification scripts, checks accessibility/contrast, and writes `walkthrough.md`.
 
 ## 🔄 AUTONOMOUS SANDBOX DIAGNOSTIC LOOP (OpenHands Style)
 If the QA verification runs or console logs fail at any point (exit code is not 0), enter this self-healing execution loop immediately:

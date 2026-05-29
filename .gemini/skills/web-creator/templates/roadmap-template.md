@@ -21,16 +21,24 @@
 - [ ] Build interactive widgets or secondary blocks (pricing cards, testimonials slider, contact form)
 - [ ] Implement footer with sitemap and copyright
 
-## ⚙️ Phase 4: JavaScript & Interactivity
-- [ ] Implement DOM loading event and main application state
-- [ ] Add mobile nav toggle event listener and accessibility keyboard navigation
-- [ ] Add interactive UI dynamics (e.g., tab switching, testimonials slider carousel, FAQ accordion)
-- [ ] Integrate mock/external API or local storage data logic
-- [ ] Add trigger-based micro-animations (e.g., scroll reveals, button click ripples)
+## ⚙️ Phase 4: Backend & Database Integration
+- [ ] Initialize Node.js dependencies (`express`, `mongoose`, `dotenv`, `cors`, `jsonwebtoken`, `bcryptjs`) in `package.json`
+- [ ] Establish database connection utility (`config/db.js`) and environment credentials (`.env`)
+- [ ] Implement Mongoose database schemas (`User.js`, `Product.js`, `Category.js`, `Collection.js`, `Order.js`, `Coupon.js`, `Review.js`, `ContactMessage.js`, `Consultation.js`, `SiteSetting.js`) in `models/`
+- [ ] Implement secure Express API routes and authentication/role middlewares in `routes/` and `middleware/`
+- [ ] Implement controller business logic for standard CRUD operations, customer forms, user auth, and consultation processing in `controllers/`
+- [ ] Connect main server entrypoint (`server.js`) to serve the static frontend and mount all API routes
 
-## 🚀 Phase 5: Refinement, SEO & Polish
+## ⚡ Phase 5: Frontend JS & API Connection
+- [ ] Implement DOM loading event, navigation toggles, page dynamic state management, and active styling
+- [ ] Connect frontend forms (Login, Register, Contact, Consultation) to backend API endpoints
+- [ ] Connect product listing filters (by category, brand, skin type, function) to the dynamic product API
+- [ ] Integrate local storage cart and user state with API-based ordering and wishlist endpoints
+- [ ] Add trigger-based micro-animations (fade-in, slide-up, scroll reveals) and loading states
+
+## 🚀 Phase 6: Refinement, SEO & QA Polish
 - [ ] Add SEO tags (meta description, viewport, Open Graph, single `<h1>`)
 - [ ] Audit responsive layouts on Mobile, Tablet, and Desktop
-- [ ] Ensure all assets are loaded properly (no placeholders, run `generate_image` for mock screenshots or illustrations)
+- [ ] Ensure all assets are loaded properly (no placeholders, run `generate_image` for illustrations)
 - [ ] Verify accessibility compliance (WCAG contrast, focus indicators)
-- [ ] Create walkthrough documentation
+- [ ] Run automated Playwright user-flow verification and output test report

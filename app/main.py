@@ -4,7 +4,7 @@ from typing import Optional, List
 import datetime
 
 from app.db.database import engine, Base, get_db
-from app.db.models import Project, BuildTask, TestRun
+from app.db.models import Project, BuildTask, TestRun, SecurityScan
 from app.agents.coordinator import AgentCoordinator
 from sqlalchemy.orm import Session
 from app.worker import build_project_task
@@ -39,6 +39,7 @@ class ProjectStatusResponse(BaseModel):
     project: ProjectResponse
     tasks: List[TaskResponse]
     latest_test_run: Optional[dict] = None
+    latest_security_scan: Optional[dict] = None
 
 @app.post("/api/project/init")
 async def init_project(req: ProjectInitReq):
@@ -83,6 +84,17 @@ async def get_project_status(project_id: str, db: Session = Depends(get_db)):
             "report_path": latest_run_record.report_path
         }
 
+    latest_security_record = db.query(SecurityScan).filter(SecurityScan.project_id == project_id).order_by(SecurityScan.timestamp.desc()).first()
+    latest_security_scan_data = None
+    if latest_security_record:
+        latest_security_scan_data = {
+            "id": latest_security_record.id,
+            "timestamp": latest_security_record.timestamp.isoformat(),
+            "passed": latest_security_record.passed,
+            "vulnerabilities_found": latest_security_record.vulnerabilities_found,
+            "report_path": latest_security_record.report_path
+        }
+
     project_data = ProjectResponse(
         id=db_project.id,
         name=db_project.name,
@@ -106,7 +118,8 @@ async def get_project_status(project_id: str, db: Session = Depends(get_db)):
     return ProjectStatusResponse(
         project=project_data,
         tasks=task_list,
-        latest_test_run=latest_test_run_data
+        latest_test_run=latest_test_run_data,
+        latest_security_scan=latest_security_scan_data
     )
 
 @app.post("/api/project/forensics/{project_id}")

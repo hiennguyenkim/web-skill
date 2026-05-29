@@ -3,6 +3,14 @@ import argparse
 import asyncio
 import uvicorn
 
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 async def run_cli_build(name: str, concept: str, workspace: str):
     from app.agents.coordinator import AgentCoordinator
     coordinator = AgentCoordinator(workspace_path=workspace)

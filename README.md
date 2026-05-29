@@ -18,7 +18,6 @@ d:/ai-web-skill/
 │   ├── mcp/             # Cấu hình Model Context Protocol (FastMCP)
 │   └── main.py          # FastAPI HTTP Server endpoints
 ├── .gemini/             # Skill định cấu hình cho Gemini CLI
-├── .claude/             # Skill định cấu hình cho Claude Code
 ├── cli.py               # Công cụ tương tác dòng lệnh (CLI tool)
 ├── Dockerfile           # Đóng gói môi trường ảo (Playwright base image)
 ├── QUICKSTART.md        # Hướng dẫn nhanh về các lệnh YOLO
@@ -71,7 +70,7 @@ python cli.py worker
 ```
 
 ### 4. Khởi chạy máy chủ MCP (Model Context Protocol)
-Chia sẻ các công cụ của Web Creator tới các AI Client hỗ trợ MCP (như Claude Desktop, Cursor, v.v.) qua giao tiếp STDIO:
+Chia sẻ các công cụ của Web Creator tới các AI Client hỗ trợ MCP (như Cursor, v.v.) qua giao tiếp STDIO:
 ```bash
 python cli.py mcp
 ```
@@ -96,4 +95,4 @@ docker run --env-file .env web-creator-platform python3 cli.py worker
 ---
 
 ## 🛡️ Giấy phép & Đóng góp
-Dự án được phân phối dưới dạng nguồn mở. Vui lòng tham khảo các tệp tin trong `.gemini/` và `.claude/` để cấu hình tích hợp thêm cho các IDE/CLI tương ứng.
+Dự án được phân phối dưới dạng nguồn mở. Vui lòng tham khảo các tệp tin trong `.gemini/` để cấu hình tích hợp thêm cho các IDE/CLI tương ứng.

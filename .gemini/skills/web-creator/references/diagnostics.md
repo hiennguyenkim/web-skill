@@ -54,7 +54,7 @@ Follow these guidelines strictly to build clean, premium, and error-free web cod
 
 ---
 
-## 👁️ 5. CONTRAST & ACCESSIBILITY AUDITING (Aesthetic Fails)
+## 👑 5. CONTRAST & ACCESSIBILITY AUDITING (Aesthetic Fails)
 - **Problem**: Text that is hard to read because the color contrast between background and text is too low (e.g. gold text on light pink, or dark grey text on black).
 - **Rule**:
   - Ensure all text elements meet WCAG AA contrast standards (minimum contrast ratio of 4.5:1 for normal text, 3:1 for large text).

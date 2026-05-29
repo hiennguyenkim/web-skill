@@ -34,9 +34,12 @@ We adhere to modern, premium aesthetics. No browser defaults are permitted.
 - **Hover effects**: Translate-y offset (`transform: translateY(-4px)`), glow shadow increase, gradient shift.
 
 ## 🛠️ Technology Stack & Architecture
-- **Structure**: Semantic HTML5 (header, main, section, article, footer, unique IDs for key elements)
-- **Styling**: Modern CSS3 (CSS Custom Properties/Variables, CSS Grid, Flexbox, media queries for responsive layout)
-- **Logic**: Vanilla ES6+ JavaScript (Modular structure, async API calls, interactive state management)
+- **Frontend Structure**: Semantic HTML5 (header, nav, main, section, article, footer, unique IDs for key elements)
+- **Frontend Styling**: Modern CSS3 (CSS Custom Properties/Variables, CSS Grid, Flexbox, media queries for responsive layout)
+- **Frontend Logic**: Vanilla ES6+ JavaScript (Modular structure, async API calls, interactive state management, fetch integration)
+- **Backend Framework**: Node.js & Express.js (MVC architecture: server.js entrypoint, routes/, controllers/, middleware/, config/)
+- **Database Layer**: MongoDB & Mongoose ORM (Schemas: models/User.js, models/Product.js, etc.)
+- **Security & Session**: JWT (jsonwebtoken) authorization, Bcrypt.js password hashing, upload limits (multer)
 - **Icons**: Lucide Icons or Google Fonts Material Symbols (SVG-based, never local image icon assets)
 
 ## 🔍 SEO & Accessibility Rules

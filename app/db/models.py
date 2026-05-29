@@ -17,6 +17,7 @@ class Project(Base):
 
     tasks = relationship("BuildTask", back_populates="project", cascade="all, delete-orphan")
     test_runs = relationship("TestRun", back_populates="project", cascade="all, delete-orphan")
+    security_scans = relationship("SecurityScan", back_populates="project", cascade="all, delete-orphan")
 
 class BuildTask(Base):
     __tablename__ = "build_tasks"
@@ -44,3 +45,16 @@ class TestRun(Base):
     report_path = Column(String, nullable=True)
 
     project = relationship("Project", back_populates="test_runs")
+
+class SecurityScan(Base):
+    __tablename__ = "security_scans"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    passed = Column(Boolean, default=False)
+    vulnerabilities_found = Column(Integer, default=0)
+    report_path = Column(String, nullable=True)
+
+    project = relationship("Project", back_populates="security_scans")
+

@@ -49,3 +49,4 @@ Quy trình `/web-creator build` (Phase 5) sẽ tự động kích hoạt:
 - `-p "[lệnh]"`: Chạy lệnh chỉ định ở chế độ không tương tác (headless) và đóng khi hoàn tất.
 
 # gemini -m gemini-3-flash-preview --skip-trust --approval-mode=yolo -p "/web-creator build yeucau.docx"
+# gemini -m gemini-3.1-pro-preview --skip-trust --approval-mode=yolo -p "/web-creator build yeucau.docx"
