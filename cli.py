@@ -1,4 +1,10 @@
+import os
 import sys
+
+# Ensure apps/web_creator and project root are in Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "apps", "web_creator")))
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
 import argparse
 import asyncio
 import uvicorn

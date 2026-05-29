@@ -15,11 +15,14 @@ class Project(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     tasks = relationship("BuildTask", back_populates="project", cascade="all, delete-orphan")
     test_runs = relationship("TestRun", back_populates="project", cascade="all, delete-orphan")
     security_scans = relationship("SecurityScan", back_populates="project", cascade="all, delete-orphan")
     sprints = relationship("Sprint", back_populates="project", cascade="all, delete-orphan")
     user_stories = relationship("UserStory", back_populates="project", cascade="all, delete-orphan")
+    owner = relationship("User", back_populates="projects")
 
 class BuildTask(Base):
     __tablename__ = "build_tasks"
@@ -114,5 +117,18 @@ class DevTask(Base):
     status = Column(String, default="todo") # todo, in_progress, done
 
     user_story = relationship("UserStory", back_populates="dev_tasks")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="PO") # PO, Admin
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    projects = relationship("Project", back_populates="owner")
+
 
 
