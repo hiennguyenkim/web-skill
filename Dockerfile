@@ -1,6 +1,6 @@
 # Start from the official Playwright Jammy container image
 # This comes preinstalled with python, node, and browser execution dependencies
-FROM mcr.microsoft.com/playwright:v1.41.2-jammy
+FROM mcr.microsoft.com/playwright:v1.44.0-noble
 
 # Set working directory
 WORKDIR /usr/src/app
