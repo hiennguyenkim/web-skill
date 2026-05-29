@@ -13,7 +13,9 @@ async def web_creator_init(name: str, concept: str, workspace_path: str = None) 
     Generates specifications (PROJECT.md), checks and roadmap files.
     """
     path = workspace_path or os.path.join(BASE_DIR, "projects", name.replace(' ', '_').lower()).replace("\\", "/")
-    coordinator = AgentCoordinator(workspace_path=path)
+    from platform_core.core.environment.local import LocalEnvironment
+    env = LocalEnvironment(workspace_path=path)
+    coordinator = AgentCoordinator(env=env)
     try:
         project_id = await coordinator.init_project(name=name, concept=concept)
         return f"✅ Project successfully initialized. Project ID: {project_id} | Workspace: {path}"
@@ -38,7 +40,9 @@ async def web_creator_build(project_id: str) -> str:
     workspace = project.workspace_path
     db.close()
 
-    coordinator = AgentCoordinator(workspace_path=workspace)
+    from platform_core.core.environment.local import LocalEnvironment
+    env = LocalEnvironment(workspace_path=workspace)
+    coordinator = AgentCoordinator(env=env)
     try:
         await coordinator.build_project(project_id=project_id)
         return f"✅ Web Creator build succeeded for project {project_id}. Site generated and verified in {workspace}."
@@ -63,7 +67,9 @@ async def web_creator_forensics(project_id: str) -> str:
     workspace = project.workspace_path
     db.close()
 
-    coordinator = AgentCoordinator(workspace_path=workspace)
+    from platform_core.core.environment.local import LocalEnvironment
+    env = LocalEnvironment(workspace_path=workspace)
+    coordinator = AgentCoordinator(env=env)
     try:
         await coordinator.run_playwright_test(project)
         return f"✅ Diagnostics run succeeded. Project is verified and console-clean."

@@ -14,7 +14,9 @@ except Exception:
 
 async def run_cli_build(name: str, concept: str, workspace: str):
     from app.agents.coordinator import AgentCoordinator
-    coordinator = AgentCoordinator(workspace_path=workspace)
+    from platform_core.core.environment.local import LocalEnvironment
+    env = LocalEnvironment(workspace_path=workspace)
+    coordinator = AgentCoordinator(env=env)
     try:
         print(f"🚀 Initializing GSD specs for project: {name}...")
         project_id = await coordinator.init_project(name=name, concept=concept)

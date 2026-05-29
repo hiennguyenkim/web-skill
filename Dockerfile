@@ -16,11 +16,18 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# Copy and install node dependencies for frontend dashboard
+COPY apps/po_dashboard/package*.json ./apps/po_dashboard/
+RUN cd apps/po_dashboard && npm install
+
 # Copy application source code
 COPY core/ ./core/
 COPY skills/ ./skills/
 COPY apps/ ./apps/
 COPY cli.py ./
+
+# Build static frontend bundle
+RUN cd apps/po_dashboard && npm run build
 
 # Expose port for FastAPI server
 EXPOSE 8000

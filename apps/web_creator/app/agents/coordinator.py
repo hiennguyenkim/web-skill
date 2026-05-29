@@ -9,10 +9,12 @@ from app.db.database import SessionLocal
 from app.db.models import Project, BuildTask, TestRun, SecurityScan
 from app.agents.personas import PMAgent, DesignerAgent, CoderAgent, CSSAgent, QAAgent, SecurityAgent, BackendAgent
 
+from platform_core.core.environment.base import Environment, CommandExecutionError
+
 class AgentCoordinator:
-    def __init__(self, workspace_path: str):
-        self.workspace_path = workspace_path
-        os.makedirs(workspace_path, exist_ok=True)
+    def __init__(self, env: Environment):
+        self.env = env
+        self.workspace_path = getattr(env, "workspace_path", "")
         
         self.pm_agent = PMAgent()
         self.designer_agent = DesignerAgent()
@@ -35,7 +37,7 @@ class AgentCoordinator:
             possible_paths = [concept, os.path.join(self.workspace_path, concept), os.path.abspath(concept)]
             resolved_path = None
             for p in possible_paths:
-                if os.path.exists(p) and os.path.isfile(p):
+                if self.env.exists(p) or os.path.exists(p):
                     resolved_path = p
                     break
             
@@ -52,14 +54,17 @@ class AgentCoordinator:
             possible_paths = [concept, os.path.join(self.workspace_path, concept), os.path.abspath(concept)]
             resolved_path = None
             for p in possible_paths:
-                if os.path.exists(p) and os.path.isfile(p):
+                if self.env.exists(p) or os.path.exists(p):
                     resolved_path = p
                     break
             if resolved_path:
                 print(f"📄 Reading project requirements from text file: {resolved_path}")
                 try:
-                    with open(resolved_path, "r", encoding="utf-8") as f:
-                        concept_text = f.read()
+                    if self.env.exists(resolved_path):
+                        concept_text = self.env.read_file(resolved_path)
+                    else:
+                        with open(resolved_path, "r", encoding="utf-8") as f:
+                            concept_text = f.read()
                 except Exception as e:
                     print(f"⚠️ Warning: Failed to read text file {resolved_path}: {e}")
 
@@ -89,14 +94,10 @@ class AgentCoordinator:
             data = json.loads(clean_json)
             
             # Write files to workspace
-            with open(os.path.join(self.workspace_path, "PROJECT.md"), "w", encoding="utf-8") as f:
-                f.write(data.get("project_md", ""))
-            with open(os.path.join(self.workspace_path, "ROADMAP.md"), "w", encoding="utf-8") as f:
-                f.write(data.get("roadmap_md", ""))
-            with open(os.path.join(self.workspace_path, "STATE.md"), "w", encoding="utf-8") as f:
-                f.write(data.get("state_md", ""))
-            with open(os.path.join(self.workspace_path, "DESIGN.md"), "w", encoding="utf-8") as f:
-                f.write(data.get("design_md", ""))
+            self.env.write_file("PROJECT.md", data.get("project_md", ""))
+            self.env.write_file("ROADMAP.md", data.get("roadmap_md", ""))
+            self.env.write_file("STATE.md", data.get("state_md", ""))
+            self.env.write_file("DESIGN.md", data.get("design_md", ""))
 
             # Register Project in SQLite
             db_project = Project(
@@ -156,10 +157,8 @@ class AgentCoordinator:
         try:
             # Read DESIGN.md if it exists to pass design tokens to subsequent agents
             design_md_content = ""
-            design_path = os.path.join(self.workspace_path, "DESIGN.md")
-            if os.path.exists(design_path):
-                with open(design_path, "r", encoding="utf-8") as f:
-                    design_md_content = f.read()
+            if self.env.exists("DESIGN.md"):
+                design_md_content = self.env.read_file("DESIGN.md")
 
             # 1. Designer Stage
             print("🎨 Running UI/UX Designer Agent...")
@@ -171,8 +170,7 @@ class AgentCoordinator:
                 "Return ONLY CSS code."
             )
             css_variables = await self.designer_agent.call_llm(design_prompt)
-            with open(os.path.join(self.workspace_path, "index.css"), "w", encoding="utf-8") as f:
-                f.write(css_variables)
+            self.env.write_file("index.css", css_variables)
             
             # Update Phase 1 task
             task_p1 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase1").first()
@@ -192,8 +190,7 @@ class AgentCoordinator:
                 "Return ONLY the complete HTML code."
             )
             html_code = await self.coder_agent.call_llm(coder_prompt)
-            with open(os.path.join(self.workspace_path, "index.html"), "w", encoding="utf-8") as f:
-                f.write(html_code)
+            self.env.write_file("index.html", html_code)
 
             task_p2 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase2").first()
             if task_p2:
@@ -212,8 +209,7 @@ class AgentCoordinator:
                 "Return ONLY the upgraded CSS content."
             )
             full_css = await self.css_agent.call_llm(css_prompt)
-            with open(os.path.join(self.workspace_path, "index.css"), "w", encoding="utf-8") as f:
-                f.write(full_css)
+            self.env.write_file("index.css", full_css)
 
             task_p3 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase3").first()
             if task_p3:
@@ -247,10 +243,7 @@ class AgentCoordinator:
                 
                 files = json.loads(clean_json)
                 for f_info in files:
-                    f_path = os.path.join(self.workspace_path, f_info["file"])
-                    os.makedirs(os.path.dirname(f_path), exist_ok=True)
-                    with open(f_path, "w", encoding="utf-8") as f:
-                        f.write(f_info["content"])
+                    self.env.write_file(f_info["file"], f_info["content"])
                 print(f"✅ Generated {len(files)} backend files successfully.")
             except Exception as backend_err:
                 print(f"⚠️ Failed to parse or write backend files: {backend_err}")
@@ -301,34 +294,30 @@ class AgentCoordinator:
         
         try:
             # 1. Copy verification script template
-            template_path = path_to_template = os.path.join(
+            template_path = os.path.join(
                 os.path.dirname(__file__), "..", "templates", "playwright-template.js"
             )
             # Fallback pathing
             if not os.path.exists(template_path):
-                template_path = os.path.join("d:\\ai-web-skill", ".gemini", "skills", "web-creator", "templates", "playwright-template.js")
-            
-            dest_path = os.path.join(self.workspace_path, "verify-ui.js")
+                template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "skills", "web-creator", "templates", "playwright-template.js")
             
             with open(template_path, "r", encoding="utf-8") as tf:
                 script_content = tf.read()
-            with open(dest_path, "w", encoding="utf-8") as df:
-                df.write(script_content)
+            self.env.write_file("verify-ui.js", script_content)
             
             # 2. Subprocess execution (OpenHands loop)
             max_retries = 3
             for iteration in range(max_retries):
                 print(f"🔄 Run Playwright verification attempt {iteration + 1}...")
-                result = subprocess.run(
-                    ["node", "verify-ui.js"], 
-                    cwd=self.workspace_path,
-                    capture_output=True,
-                    text=True
-                )
-                
-                # Check outcome
-                passed = (result.returncode == 0)
-                print(result.stdout)
+                passed = True
+                output = ""
+                try:
+                    output = self.env.run_command(["node", "verify-ui.js"])
+                    print(output)
+                except CommandExecutionError as e:
+                    passed = False
+                    output = e.stdout + "\n" + e.stderr
+                    print(f"⚠️ Verification Failed:\n{e.stderr}")
                 
                 if passed:
                     # Save run results in SQLite
@@ -341,11 +330,10 @@ class AgentCoordinator:
                     db.commit()
                     return
                 else:
-                    print(f"⚠️ Verification Failed:\n{result.stderr}")
                     if iteration < max_retries - 1:
                         print("🤖 Entering Self-Healing Diagnostics Loop...")
                         # Run targeted fix using LLM forensics
-                        await self.auto_repair(result.stderr or result.stdout)
+                        await self.auto_repair(output)
                     else:
                         db.add(TestRun(
                             project_id=project.id,
@@ -378,8 +366,7 @@ class AgentCoordinator:
             
             patch = json.loads(clean_json)
             target_file = patch.get("file", "index.html")
-            with open(os.path.join(self.workspace_path, target_file), "w", encoding="utf-8") as f:
-                f.write(patch.get("content", ""))
+            self.env.write_file(target_file, patch.get("content", ""))
             print(f"🔧 Patched {target_file} successfully.")
         except Exception as repair_err:
             print(f"❌ Failed to parse and apply repair patch: {repair_err}")
@@ -396,52 +383,48 @@ class AgentCoordinator:
             try:
                 # 1. Attempt running Strix CLI
                 print("🔄 Executing Strix CLI scanner...")
-                result = subprocess.run(
-                    ["strix", "--target", ".", "--non-interactive", "--scan-mode", "quick"],
-                    cwd=self.workspace_path,
-                    capture_output=True,
-                    text=True
-                )
-                
-                if result.returncode == 0 or result.returncode == 2:
-                    print("✅ Strix CLI scan finished successfully.")
-                    if result.returncode == 2:
+                try:
+                    stdout = self.env.run_command(
+                        ["strix", "--target", ".", "--non-interactive", "--scan-mode", "quick"]
+                    )
+                except CommandExecutionError as e:
+                    # Return code 2 means scan succeeded but vulnerabilities found
+                    if e.returncode == 2:
                         passed = False
-                    
-                    strix_runs_dir = os.path.join(self.workspace_path, "strix_runs")
-                    if os.path.exists(strix_runs_dir):
-                        runs = sorted([d for d in os.listdir(strix_runs_dir) if os.path.isdir(os.path.join(strix_runs_dir, d))])
-                        if runs:
-                            latest_run_dir = os.path.join(strix_runs_dir, runs[-1])
-                            md_files = [f for f in os.listdir(latest_run_dir) if f.endswith(".md")]
-                            if md_files:
-                                with open(os.path.join(latest_run_dir, md_files[0]), "r", encoding="utf-8") as rf:
-                                    report_content = rf.read()
-                            
-                            json_files = [f for f in os.listdir(latest_run_dir) if f.endswith(".json")]
-                            if json_files:
-                                with open(os.path.join(latest_run_dir, json_files[0]), "r", encoding="utf-8") as jf:
-                                    try:
-                                        data = json.load(jf)
-                                        vulnerabilities_count = len(data.get("vulnerabilities", []))
-                                    except Exception as json_err:
-                                        print(f"⚠️ Failed to parse Strix JSON report: {json_err}")
-                    
-                    if not report_content:
-                        report_content = f"# Strix CLI Scan Report\n\n## Output Log\n\n```\n{result.stdout}\n```"
-                else:
-                    raise FileNotFoundError("Strix command returned non-zero error code.")
+                        stdout = e.stdout
+                    else:
+                        raise e
+                
+                print("✅ Strix CLI scan finished successfully.")
+                
+                if self.env.exists("strix_runs"):
+                    runs = sorted([d for d in self.env.list_dir("strix_runs") if self.env.exists(os.path.join("strix_runs", d))])
+                    if runs:
+                        latest_run_dir = os.path.join("strix_runs", runs[-1])
+                        md_files = [f for f in self.env.list_dir(latest_run_dir) if f.endswith(".md")]
+                        if md_files:
+                            report_content = self.env.read_file(os.path.join(latest_run_dir, md_files[0]))
+                        
+                        json_files = [f for f in self.env.list_dir(latest_run_dir) if f.endswith(".json")]
+                        if json_files:
+                            try:
+                                json_content = self.env.read_file(os.path.join(latest_run_dir, json_files[0]))
+                                data = json.loads(json_content)
+                                vulnerabilities_count = len(data.get("vulnerabilities", []))
+                            except Exception as json_err:
+                                print(f"⚠️ Failed to parse Strix JSON report: {json_err}")
+                
+                if not report_content:
+                    report_content = f"# Strix CLI Scan Report\n\n## Output Log\n\n```\n{stdout}\n```"
                     
             except Exception as cli_err:
                 print(f"⚠️ Strix CLI is unavailable or failed ({cli_err}). Falling back to AI Security Agent...")
                 # 2. AI Fallback scanner
                 files_content = {}
                 for fname in ["index.html", "index.css", "verify-ui.js"]:
-                    fpath = os.path.join(self.workspace_path, fname)
-                    if os.path.exists(fpath):
+                    if self.env.exists(fname):
                         try:
-                            with open(fpath, "r", encoding="utf-8") as f:
-                                files_content[fname] = f.read()
+                            files_content[fname] = self.env.read_file(fname)
                         except Exception as file_err:
                             print(f"Failed to read {fname} for scanning: {file_err}")
 
@@ -482,8 +465,7 @@ class AgentCoordinator:
                     report_content = f"# Security Scan Fallback Report\n\nAI scan failed: {ai_err}"
 
             # Write the report to workspace
-            with open(report_path, "w", encoding="utf-8") as f:
-                f.write(report_content)
+            self.env.write_file(report_filename, report_content)
 
             # Record to DB
             db_scan = SecurityScan(

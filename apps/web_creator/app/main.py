@@ -183,7 +183,9 @@ async def get_projects(db: Session = Depends(get_db), current_user: User = Depen
 @app.post("/api/project/init")
 async def init_project(req: ProjectInitReq, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     workspace = req.workspace_path or os.path.join(projects_dir, req.name.replace(' ', '_').lower()).replace("\\", "/")
-    coordinator = AgentCoordinator(workspace_path=workspace)
+    from platform_core.core.environment.local import LocalEnvironment
+    env = LocalEnvironment(workspace_path=workspace)
+    coordinator = AgentCoordinator(env=env)
     try:
         project_id = await coordinator.init_project(name=req.name, concept=req.concept)
         db_project = db.query(Project).filter(Project.id == project_id).first()
@@ -270,7 +272,9 @@ async def trigger_forensics(project_id: str, db: Session = Depends(get_db), curr
     if not db_project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    coordinator = AgentCoordinator(workspace_path=db_project.workspace_path)
+    from platform_core.core.environment.local import LocalEnvironment
+    env = LocalEnvironment(workspace_path=db_project.workspace_path)
+    coordinator = AgentCoordinator(env=env)
     try:
         await coordinator.run_playwright_test(db_project)
         return {"status": "SUCCESS", "message": "Forensics run succeeded. Test passed."}
