@@ -16,7 +16,7 @@ services:
       - "8000:8000"
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=sqlite:///d:/ai-web-skill/web_creator.db
+      - DATABASE_URL=sqlite:///web_creator.db
       - LLM_PROVIDER=gemini
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
@@ -32,7 +32,7 @@ services:
     command: python3 cli.py worker
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=sqlite:///d:/ai-web-skill/web_creator.db
+      - DATABASE_URL=sqlite:///web_creator.db
       - LLM_PROVIDER=gemini
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}

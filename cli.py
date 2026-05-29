@@ -51,7 +51,7 @@ def main():
     build_parser = subparsers.add_parser("build", help="Run a direct local build task")
     build_parser.add_argument("name", type=str, help="Name of your web app")
     build_parser.add_argument("concept", type=str, help="Text concept descriptions or Word .docx path")
-    build_parser.add_argument("--workspace", type=str, default="d:/ai-web-skill/projects/cli_build", help="Target workspace path")
+    build_parser.add_argument("--workspace", type=str, default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "projects", "cli_build").replace("\\", "/"), help="Target workspace path")
 
     args = parser.parse_args()
 

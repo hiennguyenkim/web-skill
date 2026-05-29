@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 # Append project root to import skills and core libraries
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-from app.db.database import engine, Base, get_db
+from app.db.database import engine, Base, get_db, BASE_DIR
 from app.db.models import Project, BuildTask, TestRun, SecurityScan, UserStory, Sprint, DevTask, User
 from app.db.auth import hash_password, verify_password, create_access_token, get_current_user
 from app.agents.coordinator import AgentCoordinator
@@ -35,7 +35,7 @@ app.add_middleware(
 )
 
 # Static files mount for generated projects and reports
-projects_dir = "d:/ai-web-skill/projects"
+projects_dir = os.path.join(BASE_DIR, "projects").replace("\\", "/")
 os.makedirs(projects_dir, exist_ok=True)
 app.mount("/projects", StaticFiles(directory=projects_dir), name="projects")
 
@@ -182,7 +182,7 @@ async def get_projects(db: Session = Depends(get_db), current_user: User = Depen
 
 @app.post("/api/project/init")
 async def init_project(req: ProjectInitReq, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    workspace = req.workspace_path or f"d:/ai-web-skill/projects/{req.name.replace(' ', '_').lower()}"
+    workspace = req.workspace_path or os.path.join(projects_dir, req.name.replace(' ', '_').lower()).replace("\\", "/")
     coordinator = AgentCoordinator(workspace_path=workspace)
     try:
         project_id = await coordinator.init_project(name=req.name, concept=req.concept)

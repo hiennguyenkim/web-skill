@@ -16,7 +16,7 @@ node_modules/
 package-lock.json
 
 # SQLite database file
-web_creator.db
+*.db
 
 # Generated project files inside local workspace
 projects/

@@ -1,5 +1,7 @@
+import os
 from mcp.server.fastmcp import FastMCP
 from app.agents.coordinator import AgentCoordinator
+from app.db.database import BASE_DIR
 import asyncio
 
 mcp = FastMCP("Web-Creator-MCP-Server")
@@ -10,7 +12,7 @@ async def web_creator_init(name: str, concept: str, workspace_path: str = None) 
     Initialize a web creation project.
     Generates specifications (PROJECT.md), checks and roadmap files.
     """
-    path = workspace_path or f"d:/ai-web-skill/projects/{name.replace(' ', '_').lower()}"
+    path = workspace_path or os.path.join(BASE_DIR, "projects", name.replace(' ', '_').lower()).replace("\\", "/")
     coordinator = AgentCoordinator(workspace_path=path)
     try:
         project_id = await coordinator.init_project(name=name, concept=concept)
