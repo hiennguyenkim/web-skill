@@ -18,6 +18,8 @@ class Project(Base):
     tasks = relationship("BuildTask", back_populates="project", cascade="all, delete-orphan")
     test_runs = relationship("TestRun", back_populates="project", cascade="all, delete-orphan")
     security_scans = relationship("SecurityScan", back_populates="project", cascade="all, delete-orphan")
+    sprints = relationship("Sprint", back_populates="project", cascade="all, delete-orphan")
+    user_stories = relationship("UserStory", back_populates="project", cascade="all, delete-orphan")
 
 class BuildTask(Base):
     __tablename__ = "build_tasks"
@@ -57,4 +59,60 @@ class SecurityScan(Base):
     report_path = Column(String, nullable=True)
 
     project = relationship("Project", back_populates="security_scans")
+
+
+class Sprint(Base):
+    __tablename__ = "sprints"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    name = Column(String, nullable=False)
+    goal = Column(Text, nullable=True)
+    start_date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True)
+    status = Column(String, default="planning") # planning, active, completed
+
+    project = relationship("Project", back_populates="sprints")
+    user_stories = relationship("UserStory", back_populates="sprint")
+
+
+class UserStory(Base):
+    __tablename__ = "user_stories"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    sprint_id = Column(Integer, ForeignKey("sprints.id"), nullable=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    persona = Column(String, nullable=True)
+    want = Column(Text, nullable=True)
+    benefit = Column(Text, nullable=True)
+    acceptance_criteria = Column(Text, nullable=True)
+    priority = Column(String, default="Should") # Must, Should, Could, Won't
+    business_value = Column(Integer, default=5)
+    technical_risk = Column(Integer, default=5)
+    rationale = Column(Text, nullable=True)
+    story_points = Column(Integer, nullable=True)
+    complexity_rationale = Column(Text, nullable=True)
+    status = Column(String, default="backlog") # backlog, todo, in_progress, done
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    project = relationship("Project", back_populates="user_stories")
+    sprint = relationship("Sprint", back_populates="user_stories")
+    dev_tasks = relationship("DevTask", back_populates="user_story", cascade="all, delete-orphan")
+
+
+class DevTask(Base):
+    __tablename__ = "dev_tasks"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    story_id = Column(Integer, ForeignKey("user_stories.id"), nullable=False)
+    task_type = Column(String, nullable=False) # Database, API, Frontend, QA
+    task_name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    estimated_hours = Column(Integer, default=1)
+    status = Column(String, default="todo") # todo, in_progress, done
+
+    user_story = relationship("UserStory", back_populates="dev_tasks")
+
 
