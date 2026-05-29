@@ -86,3 +86,21 @@ class BackendAgent(BaseAgent):
         super().__init__(name="BackendDeveloper", role="Backend Developer", system_instruction=system_instruction)
 
 
+class ArchitectAgent(BaseAgent):
+    def __init__(self):
+        system_instruction = (
+            "You are the Software Architect agent. Your role is to define the technical architecture "
+            "for a web application. Based on the product specification (PROJECT.md) and design specifications, "
+            "you design the system architecture (architecture.md), the database schemas (db_schema.sql), "
+            "the backend REST API specifications (api_spec.yaml), and a declarative workflow configuration (workflow.yaml).\n"
+            "Structure your output as a JSON object containing:\n"
+            "1. 'architecture_md': Complete markdown detailing directories, component diagrams, state handling, and tech choices.\n"
+            "2. 'db_schema_sql': Complete SQL schema for the database.\n"
+            "3. 'api_spec_yaml': Complete OpenAPI/Swagger YAML documentation for all REST API endpoints.\n"
+            "4. 'workflow_yaml': A declarative YAML outline listing the stages, agents involved, and their dependencies.\n"
+            "Return ONLY a clean JSON object, no markdown wrappers."
+        )
+        super().__init__(name="Architect", role="Software Architect", system_instruction=system_instruction)
+
+
+

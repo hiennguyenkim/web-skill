@@ -5,7 +5,7 @@ import pytest
 @pytest.mark.asyncio
 @patch('google.generativeai.GenerativeModel')
 async def test_llm_client_gemini_success(mock_model):
-    from core.llm.client import LLMClient
+    from platform_core.core.llm.client import LLMClient
     
     # Mocking GenerativeModel instance and async call
     mock_instance = MagicMock()
@@ -28,7 +28,7 @@ async def test_llm_client_gemini_success(mock_model):
 @pytest.mark.asyncio
 @patch('google.generativeai.GenerativeModel')
 async def test_llm_client_gemini_fallback(mock_model):
-    from core.llm.client import LLMClient
+    from platform_core.core.llm.client import LLMClient
     
     # Test fallback to synchronous generate when async generate fails
     mock_instance = MagicMock()
@@ -52,10 +52,10 @@ async def test_llm_client_gemini_fallback(mock_model):
         mock_instance.generate_content.assert_called_once_with("User query")
 
 @pytest.mark.asyncio
-@patch('core.llm.client.OpenAI')
-@patch('core.llm.client.AsyncOpenAI')
+@patch('platform_core.core.llm.client.OpenAI')
+@patch('platform_core.core.llm.client.AsyncOpenAI')
 async def test_llm_client_deepseek_success(mock_async_openai, mock_sync_openai):
-    from core.llm.client import LLMClient
+    from platform_core.core.llm.client import LLMClient
     
     # Mocking OpenAI response
     mock_async_client = MagicMock()

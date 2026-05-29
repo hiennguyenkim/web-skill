@@ -651,7 +651,7 @@ async def assign_story_to_sprint(sprint_id: int, story_id: int, db: Session = De
 
 @app.post("/api/po/chat")
 async def po_chat(req: ChatReq, current_user: User = Depends(get_current_user)):
-    from core.llm.client import LLMClient
+    from platform_core.core.llm.client import LLMClient
     po_client = LLMClient(system_instruction=(
         "You are an Elite Product Owner agent assistant. Help the user clarify requirements, "
         "write high-quality user stories with acceptance criteria, prioritize their backlog (MoSCoW), "

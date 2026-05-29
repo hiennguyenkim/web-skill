@@ -31,9 +31,11 @@ def build_project_task(project_id: str, workspace_path: str):
     """
     print(f"📥 Received background task: Dựng dự án {project_id} tại {workspace_path}")
     from app.agents.coordinator import AgentCoordinator
+    from platform_core.core.environment.local import LocalEnvironment
     
     # Run the async agent loop in a synchronous Celery worker thread
-    coordinator = AgentCoordinator(workspace_path=workspace_path)
+    env = LocalEnvironment(workspace_path=workspace_path)
+    coordinator = AgentCoordinator(env=env)
     try:
         asyncio.run(coordinator.build_project(project_id=project_id))
         print(f"🎉 Background task COMPLETED: Dự án {project_id} đã được dựng và kiểm thử thành công.")

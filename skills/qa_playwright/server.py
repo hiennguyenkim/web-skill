@@ -2,8 +2,8 @@ import asyncio
 import os
 import subprocess
 import json
-from core.skill_sdk import SkillServer, tool
-from core.llm.client import LLMClient
+from platform_core.core.skill_sdk import SkillServer, tool
+from platform_core.core.llm.client import LLMClient
 
 server = SkillServer("qa-playwright")
 

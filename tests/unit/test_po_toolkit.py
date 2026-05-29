@@ -10,7 +10,7 @@ from skills.po_toolkit.server import (
 )
 
 @pytest.mark.asyncio
-@patch('core.llm.client.LLMClient.call_llm')
+@patch('platform_core.core.llm.client.LLMClient.call_llm')
 async def test_generate_user_story_success(mock_call):
     # Setup mock LLM response
     mock_response = [
@@ -36,7 +36,7 @@ async def test_generate_user_story_success(mock_call):
     mock_call.assert_called_once()
 
 @pytest.mark.asyncio
-@patch('core.llm.client.LLMClient.call_llm')
+@patch('platform_core.core.llm.client.LLMClient.call_llm')
 async def test_prioritize_backlog_success(mock_call):
     # Setup inputs
     stories = [
@@ -76,7 +76,7 @@ async def test_prioritize_backlog_success(mock_call):
     assert result[0]["BusinessValue"] == 9
 
 @pytest.mark.asyncio
-@patch('core.llm.client.LLMClient.call_llm')
+@patch('platform_core.core.llm.client.LLMClient.call_llm')
 async def test_estimate_effort_success(mock_call):
     # Setup inputs
     stories = [
@@ -110,7 +110,7 @@ async def test_estimate_effort_success(mock_call):
     assert "ComplexityRationale" in result[0]
 
 @pytest.mark.asyncio
-@patch('core.llm.client.LLMClient.call_llm')
+@patch('platform_core.core.llm.client.LLMClient.call_llm')
 async def test_breakdown_tasks_success(mock_call):
     # Setup inputs
     story = {
