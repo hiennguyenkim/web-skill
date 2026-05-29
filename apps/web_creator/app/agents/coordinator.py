@@ -72,6 +72,8 @@ class AgentCoordinator:
                 "2. 'project_md': Complete content for PROJECT.md. "
                 "3. 'roadmap_md': Complete content for ROADMAP.md. "
                 "4. 'state_md': Complete content for STATE.md. "
+                "5. 'design_md': Complete content for DESIGN.md conforming to the Google Labs DESIGN.md spec "
+                "(with colors, typography, rounded, spacing, components in YAML frontmatter + markdown prose sections). "
                 "Return ONLY a clean JSON object, no markdown wrappers."
             )
             llm_response = await self.pm_agent.call_llm(pm_prompt)
@@ -93,6 +95,8 @@ class AgentCoordinator:
                 f.write(data.get("roadmap_md", ""))
             with open(os.path.join(self.workspace_path, "STATE.md"), "w", encoding="utf-8") as f:
                 f.write(data.get("state_md", ""))
+            with open(os.path.join(self.workspace_path, "DESIGN.md"), "w", encoding="utf-8") as f:
+                f.write(data.get("design_md", ""))
 
             # Register Project in SQLite
             db_project = Project(
@@ -150,12 +154,20 @@ class AgentCoordinator:
         db.commit()
 
         try:
+            # Read DESIGN.md if it exists to pass design tokens to subsequent agents
+            design_md_content = ""
+            design_path = os.path.join(self.workspace_path, "DESIGN.md")
+            if os.path.exists(design_path):
+                with open(design_path, "r", encoding="utf-8") as f:
+                    design_md_content = f.read()
+
             # 1. Designer Stage
             print("🎨 Running UI/UX Designer Agent...")
             design_prompt = (
+                f"Based on the following DESIGN.md specifications:\n{design_md_content}\n\n"
                 f"Design CSS variables and assets for project '{db_project.name}' themed '{db_project.theme}'. "
                 "Create design specifications that we will write to index.css. "
-                "Output a stylesheet containing root variables, glassmorphic layout tokens, and body fonts. "
+                "Output a stylesheet containing root variables matching the colors, rounded, spacing tokens, and body fonts from the design spec. "
                 "Return ONLY CSS code."
             )
             css_variables = await self.designer_agent.call_llm(design_prompt)
@@ -172,6 +184,7 @@ class AgentCoordinator:
             # 2. Coder Stage (HTML + JS)
             print("🧱 Running Creative Frontend Coder Agent...")
             coder_prompt = (
+                f"Based on the project's DESIGN.md specifications:\n{design_md_content}\n\n"
                 f"Write a responsive HTML5 structure for '{db_project.name}'. "
                 "Integrate header, nav, main sections, a footer, and unique IDs. "
                 "Include a link to 'index.css' and a script block or link to 'script.js' "
@@ -191,6 +204,7 @@ class AgentCoordinator:
             # 3. CSS Architect Stage
             print("💎 Running Responsive CSS Architect Agent...")
             css_prompt = (
+                f"Based on the project's DESIGN.md specifications:\n{design_md_content}\n\n"
                 "Upgrade our current index.css stylesheet to implement full responsive designs "
                 "(Desktop, Mobile, Tablet viewports), hover animations, and glassmorphic card grids. "
                 "Ensure scrollbar stylings and fadeIn animation keyframes are included. "
