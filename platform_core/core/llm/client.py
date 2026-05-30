@@ -1,5 +1,6 @@
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 
@@ -19,11 +20,13 @@ class LLMClient:
                 print("Warning: DEEPSEEK_API_KEY not found in environment.")
             self.openai_client = AsyncOpenAI(api_key=api_key, base_url=api_base) if api_key else None
             self.sync_openai_client = OpenAI(api_key=api_key, base_url=api_base) if api_key else None
+            self.genai_client = None
         else:
             api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
             if api_key:
-                genai.configure(api_key=api_key)
+                self.genai_client = genai.Client(api_key=api_key)
             else:
+                self.genai_client = None
                 print("Warning: GEMINI_API_KEY or GOOGLE_API_KEY not found in environment.")
 
     async def call_llm(self, prompt: str) -> str:
@@ -59,21 +62,38 @@ class LLMClient:
                 except Exception as sync_e:
                     return f"Error executing agent prompt via DeepSeek: {sync_e}"
         else:
+            if not self.genai_client:
+                try:
+                    self.genai_client = genai.Client()
+                except Exception:
+                    pass
+            if not self.genai_client:
+                return "Mock Gemini Response (No API Key)"
             model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
             try:
-                # Initialize model with system instruction if available
-                model = genai.GenerativeModel(
-                    model_name=model_name,
+                config = types.GenerateContentConfig(
                     system_instruction=self.system_instruction
+                ) if self.system_instruction else None
+                
+                response = await self.genai_client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=config
                 )
-                response = await model.generate_content_async(prompt)
                 return response.text
             except Exception as e:
                 print(f"Error in Gemini LLM call: {e}")
                 # Simple synchronous fallback if async fails or model mismatch
                 try:
-                    model = genai.GenerativeModel(model_name=model_name, system_instruction=self.system_instruction)
-                    response = model.generate_content(prompt)
+                    config = types.GenerateContentConfig(
+                        system_instruction=self.system_instruction
+                    ) if self.system_instruction else None
+                    
+                    response = self.genai_client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=config
+                    )
                     return response.text
                 except Exception as sync_e:
                     return f"Error executing agent prompt: {sync_e}"

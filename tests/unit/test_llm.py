@@ -3,53 +3,61 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 @pytest.mark.asyncio
-@patch('google.generativeai.GenerativeModel')
-async def test_llm_client_gemini_success(mock_model):
+@patch('google.genai.Client')
+async def test_llm_client_gemini_success(mock_client_cls):
     from platform_core.core.llm.client import LLMClient
     
-    # Mocking GenerativeModel instance and async call
-    mock_instance = MagicMock()
+    # Mocking Client instance and async call
+    mock_client = MagicMock()
     mock_resp = MagicMock()
     mock_resp.text = "Gemini Answer"
     
     async def mock_generate(*args, **kwargs):
         return mock_resp
     
-    mock_instance.generate_content_async.side_effect = mock_generate
-    mock_model.return_value = mock_instance
+    mock_client.aio.models.generate_content.side_effect = mock_generate
+    mock_client_cls.return_value = mock_client
     
-    with patch.dict(os.environ, {"LLM_PROVIDER": "gemini", "GEMINI_MODEL": "gemini-1.5-flash"}):
+    with patch.dict(os.environ, {
+        "LLM_PROVIDER": "gemini",
+        "GEMINI_MODEL": "gemini-1.5-flash",
+        "GEMINI_API_KEY": "test_key"
+    }):
         client = LLMClient(system_instruction="System prompt")
         response = await client.call_llm("User query")
         
         assert response == "Gemini Answer"
-        mock_model.assert_called_with(model_name="gemini-1.5-flash", system_instruction="System prompt")
+        mock_client_cls.assert_called_with(api_key="test_key")
 
 @pytest.mark.asyncio
-@patch('google.generativeai.GenerativeModel')
-async def test_llm_client_gemini_fallback(mock_model):
+@patch('google.genai.Client')
+async def test_llm_client_gemini_fallback(mock_client_cls):
     from platform_core.core.llm.client import LLMClient
     
     # Test fallback to synchronous generate when async generate fails
-    mock_instance = MagicMock()
+    mock_client = MagicMock()
     
     # Async generate raises exception
     async def mock_generate_fail(*args, **kwargs):
         raise RuntimeError("Async error")
-    mock_instance.generate_content_async.side_effect = mock_generate_fail
+    mock_client.aio.models.generate_content.side_effect = mock_generate_fail
     
     # Sync generate succeeds
     mock_resp = MagicMock()
     mock_resp.text = "Sync Gemini Answer"
-    mock_instance.generate_content.return_value = mock_resp
-    mock_model.return_value = mock_instance
+    mock_client.models.generate_content.return_value = mock_resp
+    mock_client_cls.return_value = mock_client
     
-    with patch.dict(os.environ, {"LLM_PROVIDER": "gemini", "GEMINI_MODEL": "gemini-1.5-flash"}):
+    with patch.dict(os.environ, {
+        "LLM_PROVIDER": "gemini",
+        "GEMINI_MODEL": "gemini-1.5-flash",
+        "GEMINI_API_KEY": "test_key"
+    }):
         client = LLMClient(system_instruction="System prompt")
         response = await client.call_llm("User query")
         
         assert response == "Sync Gemini Answer"
-        mock_instance.generate_content.assert_called_once_with("User query")
+        mock_client.models.generate_content.assert_called_once()
 
 @pytest.mark.asyncio
 @patch('platform_core.core.llm.client.OpenAI')

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.db.database import Base
+from app.db.models import Project, BuildTask
 from platform_core.core.environment.local import LocalEnvironment
 from app.agents.coordinator import AgentCoordinator
 
@@ -107,7 +108,70 @@ async def test_coordinator_init_project(mock_arch_call, mock_pm_call, temp_works
 
     # Verify Event Store records
     events = coordinator.event_mgr.list_events(project_id=project_id)
-    assert len(events) == 3
     assert any(evt.type == "PROJECT_INITIATED" for evt in events)
     assert any(evt.type == "SPECIFICATION_GENERATED" for evt in events)
     assert any(evt.type == "ARCHITECTURE_DEFINED" for evt in events)
+    assert any(evt.type == "STATE_TRANSITIONED" for evt in events)
+
+
+@pytest.mark.asyncio
+@patch('platform_core.core.llm.client.LLMClient.call_llm', new_callable=AsyncMock)
+@patch('app.agents.personas.DesignerAgent.call_llm', new_callable=AsyncMock)
+@patch('app.agents.personas.CoderAgent.call_llm', new_callable=AsyncMock)
+@patch('app.agents.personas.CSSAgent.call_llm', new_callable=AsyncMock)
+@patch('app.agents.personas.BackendAgent.call_llm', new_callable=AsyncMock)
+@patch('app.agents.coordinator.AgentCoordinator.run_playwright_test', new_callable=AsyncMock)
+@patch('app.agents.coordinator.AgentCoordinator.run_strix_security_scan', new_callable=AsyncMock)
+async def test_coordinator_build_project_workflow(
+    mock_scan, mock_pw, mock_backend, mock_css, mock_coder, mock_designer, mock_llm_call, temp_workspace
+):
+    env = LocalEnvironment(workspace_path=temp_workspace)
+    coordinator = AgentCoordinator(env=env)
+    
+    # Override get_db_session to use the test database
+    coordinator.get_db_session = lambda: TestingSessionLocal()
+
+    # Create dummy project in test DB
+    project_id = "test_build_proj"
+    db = TestingSessionLocal()
+    db.add(Project(
+        id=project_id,
+        name="Test Project",
+        concept="Test Concept",
+        status="PLANNING",
+        workspace_path=temp_workspace
+    ))
+    db.commit()
+    db.close()
+
+    # Setup side-effect for generic LLMClient calls in tools
+    async def mock_llm_side_effect(prompt, *args, **kwargs):
+        if "html" in prompt.lower() or "html5" in prompt.lower():
+            return "<html></html>"
+        elif "express" in prompt.lower() or "mongoose" in prompt.lower() or "backend" in prompt.lower():
+            return json.dumps([{"file": "server.js", "content": "console.log('hello');"}])
+        elif "css" in prompt.lower():
+            return "/* CSS */"
+        return "mock response"
+    mock_llm_call.side_effect = mock_llm_side_effect
+
+    # Mock agent responses in case tools fallback
+    mock_designer.return_value = "/* CSS */"
+    mock_coder.return_value = "<html></html>"
+    mock_css.return_value = "/* Upgraded CSS */"
+    mock_backend.return_value = json.dumps([{"file": "server.js", "content": "console.log('hello');"}])
+
+    # Run build
+    await coordinator.build_project(project_id)
+
+    # Assertions
+    assert env.exists("index.css")
+    assert env.exists("index.html")
+    assert env.exists("server.js")
+    mock_pw.assert_called_once()
+    mock_scan.assert_called_once()
+
+    db = TestingSessionLocal()
+    project = db.query(Project).filter(Project.id == project_id).first()
+    assert project.status == "PASSED"
+    db.close()

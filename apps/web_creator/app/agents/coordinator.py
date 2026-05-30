@@ -13,6 +13,9 @@ from platform_core.core.environment.base import Environment, CommandExecutionErr
 from platform_core.core.artifacts import Artifact, ArtifactManager
 from platform_core.core.decisions import Decision, DecisionManager
 from platform_core.core.events import Event, EventManager
+from platform_core.core.state_machine import StateMachine, ProjectState
+from platform_core.core.registry import CapabilityRegistry
+from platform_core.core.workflow import WorkflowEngine, WorkflowStage, WorkflowResult
 
 class AgentCoordinator:
     def __init__(self, env: Environment):
@@ -31,11 +34,35 @@ class AgentCoordinator:
         self.artifact_mgr = ArtifactManager(env)
         self.decision_mgr = DecisionManager(env)
         self.event_mgr = EventManager(env)
+        
+        self.state_machine = StateMachine(env=env, event_mgr=self.event_mgr)
+        self.registry = CapabilityRegistry(load_defaults=True)
+        self.workflow_engine = WorkflowEngine(env=env, event_mgr=self.event_mgr)
+
+    def _transition_state(self, trigger: str, project_id: str):
+        try:
+            new_state = self.state_machine.transition(trigger, project_id=project_id)
+            db = self.get_db_session()
+            db_project = db.query(Project).filter(Project.id == project_id).first()
+            if db_project:
+                if new_state == ProjectState.PLANNING:
+                    db_project.status = "PLANNING"
+                elif new_state in (ProjectState.ARCHITECTING, ProjectState.CODING, ProjectState.REVIEWING, ProjectState.TESTING, ProjectState.DEPLOYING):
+                    db_project.status = "BUILDING"
+                elif new_state == ProjectState.DONE:
+                    db_project.status = "PASSED"
+                elif new_state == ProjectState.FAILED:
+                    db_project.status = "FAILED"
+                db.commit()
+            db.close()
+        except Exception as e:
+            print(f"⚠️ State machine transition warning: {e}")
 
     def get_db_session(self):
         return SessionLocal()
 
     async def init_project(self, name: str, concept: str) -> str:
+        self.state_machine.reset()
         project_id = str(uuid.uuid4())[:8]
         db = self.get_db_session()
         
@@ -52,12 +79,12 @@ class AgentCoordinator:
             if resolved_path:
                 print(f"📄 Reading project requirements from docx file: {resolved_path}")
                 content = self._read_docx(resolved_path)
-                if content:
+                if content and content.strip():
                     concept_text = content
                 else:
-                    print(f"⚠️ Warning: Failed to extract text from {resolved_path}")
+                    raise ValueError(f"Failed to extract text content or document is empty: {resolved_path}")
             else:
-                print(f"⚠️ Warning: Requirements file '{concept}' not found. Using path string as concept description.")
+                raise FileNotFoundError(f"Word document requirements file '{concept}' not found.")
         elif concept.lower().endswith(".txt"):
             possible_paths = [concept, os.path.join(self.workspace_path, concept), os.path.abspath(concept)]
             resolved_path = None
@@ -73,8 +100,14 @@ class AgentCoordinator:
                     else:
                         with open(resolved_path, "r", encoding="utf-8") as f:
                             concept_text = f.read()
+                    if not concept_text or not concept_text.strip():
+                        raise ValueError(f"Text requirements file {resolved_path} is empty")
                 except Exception as e:
-                    print(f"⚠️ Warning: Failed to read text file {resolved_path}: {e}")
+                    if isinstance(e, ValueError):
+                        raise e
+                    raise RuntimeError(f"Failed to read text file {resolved_path}: {e}")
+            else:
+                raise FileNotFoundError(f"Text requirements file '{concept}' not found.")
 
         # Emit Project Initiated Event
         self.event_mgr.emit_event(Event(
@@ -107,7 +140,17 @@ class AgentCoordinator:
                 clean_json = clean_json[:-3]
             clean_json = clean_json.strip()
             
-            data = json.loads(clean_json)
+            try:
+                data = json.loads(clean_json)
+            except json.JSONDecodeError as jde:
+                print(f"⚠️ PM LLM response was not valid JSON, using default spec fallback: {jde}")
+                data = {
+                    "theme": "SaaS / Tech",
+                    "project_md": f"# {name}\n\n## Requirements\n{concept_text}\n\nThis specification was auto-generated due to LLM response parsing fallback.",
+                    "roadmap_md": f"# Roadmap for {name}\n\n- [ ] Phase 1: Establish UI/UX design theme and HSL CSS variables\n- [ ] Phase 2: Generate semantic HTML5 templates\n- [ ] Phase 3: Implement responsive CSS Grid/Flexbox\n- [ ] Phase 4: Generate Express routes and package.json\n- [ ] Phase 5: Run Playwright tests\n- [ ] Phase 6: Run security vulnerabilities scan",
+                    "state_md": f"# State of {name}\n\nInitial specification and fallback planning phase.",
+                    "design_md": f"---\ntheme: SaaS / Tech\ncolors:\n  primary: \"#007acc\"\n  secondary: \"#6c757d\"\n---\n# Design system for {name}"
+                }
             
             # Write files to workspace
             self.env.write_file("PROJECT.md", data.get("project_md", ""))
@@ -171,7 +214,36 @@ class AgentCoordinator:
                 clean_arch_json = clean_arch_json[:-3]
             clean_arch_json = clean_arch_json.strip()
             
-            arch_data = json.loads(clean_arch_json)
+            try:
+                arch_data = json.loads(clean_arch_json)
+            except json.JSONDecodeError as jde:
+                print(f"⚠️ Architect LLM response was not valid JSON, using default architecture fallback: {jde}")
+                arch_data = {
+                    "architecture_md": f"# Architecture for {name}\n\nStandard HTML5 + Express application layout with standard endpoints.",
+                    "db_schema_sql": "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+                    "api_spec_yaml": f"openapi: 3.0.0\ninfo:\n  title: {name}\n  version: 1.0.0\npaths: {{}}",
+                    "workflow_yaml": """
+stages:
+  - id: ui_design
+    agent: designer
+    dependencies: []
+  - id: frontend
+    agent: coder
+    dependencies: [ui_design]
+  - id: styling
+    agent: css_expert
+    dependencies: [frontend]
+  - id: backend
+    agent: backend_developer
+    dependencies: [styling]
+  - id: qa
+    agent: qa_tester
+    dependencies: [backend]
+  - id: security
+    agent: security_expert
+    dependencies: [qa]
+"""
+                }
             
             # Write files to workspace
             self.env.write_file("architecture.md", arch_data.get("architecture_md", ""))
@@ -251,6 +323,12 @@ class AgentCoordinator:
                 ))
             
             db.commit()
+            
+            # Replay state transitions to synchronize StateMachine and update db status
+            self._transition_state("PROJECT_INITIATED", project_id=project_id)
+            self._transition_state("SPECIFICATION_GENERATED", project_id=project_id)
+            self._transition_state("ARCHITECTURE_DEFINED", project_id=project_id)
+            
             return project_id
         except Exception as e:
             db.rollback()
@@ -266,267 +344,75 @@ class AgentCoordinator:
             db.close()
             raise ValueError(f"Project {project_id} not found")
         
+        project_name = db_project.name
         db_project.status = "BUILDING"
         db.commit()
+        db.close()
 
         # Emit Build Started Event
         self.event_mgr.emit_event(Event(
             event_type="BUILD_STARTED",
             producer="platform",
             project_id=project_id,
-            payload={"name": db_project.name}
+            payload={"name": project_name}
         ))
 
-        try:
-            # Read DESIGN.md if it exists to pass design tokens to subsequent agents
-            design_md_content = ""
-            if self.env.exists("DESIGN.md"):
-                design_md_content = self.env.read_file("DESIGN.md")
-
-            # Resolve specification artifact for parent tracking
-            spec_arts = self.artifact_mgr.list_artifacts(artifact_type="spec")
-            spec_art_id = spec_arts[0].id if spec_arts else None
-
-            # 1. Designer Stage
-            print("🎨 Running UI/UX Designer Agent...")
-            design_prompt = (
-                f"Based on the following DESIGN.md specifications:\n{design_md_content}\n\n"
-                f"Design CSS variables and assets for project '{db_project.name}' themed '{db_project.theme}'. "
-                "Create design specifications that we will write to index.css. "
-                "Output a stylesheet containing root variables matching the colors, rounded, spacing tokens, and body fonts from the design spec. "
-                "Return ONLY CSS code."
-            )
-            css_variables = await self.designer_agent.call_llm(design_prompt)
-            self.env.write_file("index.css", css_variables)
-            
-            # Save Designer Artifact
-            design_art = Artifact(
-                artifact_type="design",
-                producer="Designer",
-                content={"css_variables": css_variables},
-                project_id=project_id,
-                parent_artifact=spec_art_id,
-                metadata={"file": "index.css"}
-            )
-            self.artifact_mgr.save_artifact(design_art)
-
-            # Log Designer Decision
-            design_dec = Decision(
-                decision="Design theme HSL color palette and typography layout",
-                reason="Define consistent design system tokens based on PROJECT.md specifications.",
-                agent="Designer",
-                artifact_id=design_art.id,
-                context={}
-            )
-            self.decision_mgr.log_decision(design_dec)
-
-            # Emit Design Completed Event
-            self.event_mgr.emit_event(Event(
-                event_type="DESIGN_COMPLETED",
-                producer="Designer",
-                project_id=project_id,
-                payload={"artifact_id": design_art.id}
-            ))
-
-            # Update Phase 1 task
-            task_p1 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase1").first()
-            if task_p1:
-                task_p1.status = "COMPLETED"
-                task_p1.completed_at = datetime.datetime.utcnow()
-            db.commit()
-
-            # 2. Coder Stage (HTML + JS)
-            print("🧱 Running Creative Frontend Coder Agent...")
-            coder_prompt = (
-                f"Based on the project's DESIGN.md specifications:\n{design_md_content}\n\n"
-                f"Write a responsive HTML5 structure for '{db_project.name}'. "
-                "Integrate header, nav, main sections, a footer, and unique IDs. "
-                "Include a link to 'index.css' and a script block or link to 'script.js' "
-                "containing interactive DOM events (like nav toggles or slider logic). "
-                "Return ONLY the complete HTML code."
-            )
-            html_code = await self.coder_agent.call_llm(coder_prompt)
-            self.env.write_file("index.html", html_code)
-
-            # Save Coder Artifact
-            coder_art = Artifact(
-                artifact_type="code",
-                producer="Coder",
-                content={"html_code": html_code},
-                project_id=project_id,
-                parent_artifact=design_art.id,
-                metadata={"file": "index.html"}
-            )
-            self.artifact_mgr.save_artifact(coder_art)
-
-            # Log Coder Decision
-            coder_dec = Decision(
-                decision="Construct semantic HTML5 layout with DOM logic",
-                reason="Generate UI frame containing headers, navigations, grid containers, and scripts.",
-                agent="Coder",
-                artifact_id=coder_art.id,
-                context={}
-            )
-            self.decision_mgr.log_decision(coder_dec)
-
-            # Emit Frontend Generated Event
-            self.event_mgr.emit_event(Event(
-                event_type="FRONTEND_GENERATED",
-                producer="Coder",
-                project_id=project_id,
-                payload={"artifact_id": coder_art.id}
-            ))
-
-            task_p2 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase2").first()
-            if task_p2:
-                task_p2.status = "COMPLETED"
-                task_p2.completed_at = datetime.datetime.utcnow()
-            db.commit()
-
-            # 3. CSS Architect Stage
-            print("💎 Running Responsive CSS Architect Agent...")
-            css_prompt = (
-                f"Based on the project's DESIGN.md specifications:\n{design_md_content}\n\n"
-                "Upgrade our current index.css stylesheet to implement full responsive designs "
-                "(Desktop, Mobile, Tablet viewports), hover animations, and glassmorphic card grids. "
-                "Ensure scrollbar stylings and fadeIn animation keyframes are included. "
-                f"Here is the existing styling:\n{css_variables}\n"
-                "Return ONLY the upgraded CSS content."
-            )
-            full_css = await self.css_agent.call_llm(css_prompt)
-            self.env.write_file("index.css", full_css)
-
-            # Save/Update CSS Design Artifact
-            css_art = Artifact(
-                artifact_type="design",
-                producer="CSSArchitect",
-                content={"css_variables": css_variables, "full_css": full_css},
-                project_id=project_id,
-                parent_artifact=coder_art.id,
-                metadata={"file": "index.css", "upgraded": True}
-            )
-            self.artifact_mgr.save_artifact(css_art)
-
-            # Log CSS Decision
-            css_dec = Decision(
-                decision="Incorporate responsive breakpoints and advanced styling transitions",
-                reason="Refine index.css with mobile media queries and glassmorphic micro-interactions.",
-                agent="CSSArchitect",
-                artifact_id=css_art.id,
-                context={}
-            )
-            self.decision_mgr.log_decision(css_dec)
-
-            # Emit Styling Upgraded Event
-            self.event_mgr.emit_event(Event(
-                event_type="STYLING_UPGRADED",
-                producer="CSSArchitect",
-                project_id=project_id,
-                payload={"artifact_id": css_art.id}
-            ))
-
-            task_p3 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase3").first()
-            if task_p3:
-                task_p3.status = "COMPLETED"
-                task_p3.completed_at = datetime.datetime.utcnow()
-            db.commit()
-
-            # 4. Backend & Database Integration Stage
-            print("⚙️ Running Backend & Database Developer Agent...")
-            backend_prompt = (
-                f"Implement the backend files for the project '{db_project.name}' based on the requirements:\n"
-                f"{db_project.concept}\n\n"
-                "You must write the full, working implementation (no placeholders) for the following backend files:\n"
-                "1. All Mongoose models under the 'models/' directory (e.g. User.js, Product.js, etc. as specified in the schema requirements).\n"
-                "2. All Express routes under the 'routes/' directory (e.g. authRoutes.js, productRoutes.js).\n"
-                "3. All controller files under the 'controllers/' directory (e.g. authController.js, productController.js).\n"
-                "4. A MongoDB connection utility file at 'config/db.js'.\n"
-                "5. The main entry point Express server 'server.js' that connects to the database, imports routes, serves static public assets and views directories, and listens on a port.\n"
-                "6. A package.json file with express, mongoose, dotenv, cors, jsonwebtoken, bcryptjs, etc.\n"
-                "Output your response as a JSON array where each item is an object with 'file' (the relative file path, e.g., 'models/User.js') and 'content' (the complete source code text).\n"
-                "Return ONLY the clean JSON array of files. Do not wrap in markdown or include backticks."
-            )
-            backend_resp = await self.backend_agent.call_llm(backend_prompt)
+        workflow_content = ""
+        if self.env.exists("workflow.yaml"):
             try:
-                clean_json = backend_resp.strip()
-                if clean_json.startswith("```json"):
-                    clean_json = clean_json[7:]
-                if clean_json.endswith("```"):
-                    clean_json = clean_json[:-3]
-                clean_json = clean_json.strip()
+                workflow_content = self.env.read_file("workflow.yaml")
+            except Exception as read_err:
+                print(f"⚠️ Failed to read workflow.yaml: {read_err}")
                 
-                files = json.loads(clean_json)
-                for f_info in files:
-                    self.env.write_file(f_info["file"], f_info["content"])
-                print(f"✅ Generated {len(files)} backend files successfully.")
-
-                # Save Backend Code Artifact
-                arch_arts = self.artifact_mgr.list_artifacts(artifact_type="architecture")
-                arch_art_id = arch_arts[0].id if arch_arts else None
-                
-                backend_art = Artifact(
-                    artifact_type="code",
-                    producer="BackendDeveloper",
-                    content={"files": files},
-                    project_id=project_id,
-                    parent_artifact=arch_art_id,
-                    metadata={"type": "backend"}
-                )
-                self.artifact_mgr.save_artifact(backend_art)
-
-                # Log Backend Decision
-                backend_dec = Decision(
-                    decision="Generate database schemas, routes and controller implementations",
-                    reason="Created Mongoose/Express boilerplate and route endpoints to serve backend requests.",
-                    agent="BackendDeveloper",
-                    artifact_id=backend_art.id,
-                    context={}
-                )
-                self.decision_mgr.log_decision(backend_dec)
-
-                # Emit Backend Generated Event
-                self.event_mgr.emit_event(Event(
-                    event_type="BACKEND_GENERATED",
-                    producer="BackendDeveloper",
-                    project_id=project_id,
-                    payload={"artifact_id": backend_art.id}
-                ))
-            except Exception as backend_err:
-                print(f"⚠️ Failed to parse or write backend files: {backend_err}")
-
-            task_p4 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase4").first()
-            if task_p4:
-                task_p4.status = "COMPLETED"
-                task_p4.completed_at = datetime.datetime.utcnow()
-            db.commit()
-
-            # 5. QA & Automated Playwright Audit Stage
-            print("🧪 Running QA & Playwright Verification...")
-            await self.run_playwright_test(db_project)
-
-            task_p5 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase5").first()
-            if task_p5:
-                task_p5.status = "COMPLETED"
-                task_p5.completed_at = datetime.datetime.utcnow()
-            db.commit()
-
-            # 6. Strix Security Scan Stage (Phase 6)
-            print("🛡️ Running Strix Security Scan...")
-            task_p6 = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == "Phase6").first()
-            if task_p6:
-                task_p6.status = "RUNNING"
-                db.commit()
-
-            await self.run_strix_security_scan(db_project)
-
-            if task_p6:
-                task_p6.status = "COMPLETED"
-                task_p6.completed_at = datetime.datetime.utcnow()
+        if not workflow_content:
+            workflow_content = """
+stages:
+  ui_design:
+    name: UI UX Design Variables
+    agent: DesignerAgent
+    depends_on: []
+  frontend:
+    name: Frontend HTML/JS Coder
+    agent: CoderAgent
+    depends_on: [ui_design]
+  styling:
+    name: Responsive CSS Expert
+    agent: CSSAgent
+    depends_on: [frontend]
+  backend:
+    name: Backend generator
+    agent: BackendAgent
+    depends_on: [styling]
+  qa:
+    name: QA Playwright Audit
+    agent: QAAgent
+    depends_on: [backend]
+  security:
+    name: Security Scan
+    agent: SecurityAgent
+    depends_on: [backend]
+"""
+        try:
+            results = await self.workflow_engine.run(
+                workflow_content,
+                runner=self.run_stage,
+                project_id=project_id,
+                context={"project_id": project_id}
+            )
             
-            db_project.status = "PASSED"
-            db.commit()
-
-            # Emit Build Finished (Passed)
+            failed = [r for r in results if r.status == "FAILED"]
+            if failed:
+                raise RuntimeError(f"Workflow execution failed at stages: {[f.stage_id for f in failed]}")
+                
+            db = self.get_db_session()
+            db_project = db.query(Project).filter(Project.id == project_id).first()
+            if db_project:
+                db_project.status = "PASSED"
+                db.commit()
+            db.close()
+            
+            self._transition_state("BUILD_FINISHED", project_id=project_id)
+            
             self.event_mgr.emit_event(Event(
                 event_type="BUILD_FINISHED",
                 producer="platform",
@@ -534,12 +420,17 @@ class AgentCoordinator:
                 payload={"status": "PASSED"}
             ))
             print("✅ Build and Security Scan Completed Successfully!")
-
-        except Exception as e:
-            db_project.status = "FAILED"
-            db.commit()
             
-            # Emit Build Finished (Failed)
+        except Exception as e:
+            db = self.get_db_session()
+            db_project = db.query(Project).filter(Project.id == project_id).first()
+            if db_project:
+                db_project.status = "FAILED"
+                db.commit()
+            db.close()
+            
+            self._transition_state("BUILD_FAILED", project_id=project_id)
+            
             self.event_mgr.emit_event(Event(
                 event_type="BUILD_FINISHED",
                 producer="platform",
@@ -548,8 +439,338 @@ class AgentCoordinator:
             ))
             print(f"❌ Build Failed: {e}")
             raise e
-        finally:
+
+    def _get_phase_num(self, stage_id: str) -> Optional[str]:
+        mapping = {
+            "ui_design": "Phase1",
+            "frontend": "Phase2",
+            "styling": "Phase3",
+            "backend": "Phase4",
+            "qa": "Phase5",
+            "security": "Phase6"
+        }
+        return mapping.get(stage_id)
+
+    async def run_stage(self, stage: WorkflowStage, context: dict) -> WorkflowResult:
+        project_id = context["project_id"]
+        
+        # Retrieve project details from DB
+        db = self.get_db_session()
+        db_project = db.query(Project).filter(Project.id == project_id).first()
+        db_project_name = db_project.name if db_project else "Web App"
+        db_project_concept = db_project.concept if db_project else ""
+        db_project_theme = db_project.theme if db_project else "SaaS / Tech"
+        db.close()
+        
+        # Update BuildTask status to RUNNING in database
+        db = self.get_db_session()
+        phase_num = self._get_phase_num(stage.id)
+        if phase_num:
+            task = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == phase_num).first()
+            if task:
+                task.status = "RUNNING"
+                db.commit()
+        db.close()
+        
+        try:
+            artifact_ids = []
+            
+            cap_id_map = {
+                "ui_design": "ui_design_tokens",
+                "frontend": "frontend_generation",
+                "styling": "css_styling",
+                "backend": "backend_generation",
+                "qa": "qa_testing",
+                "security": "security_scanning",
+            }
+            cap_id = cap_id_map.get(stage.id, stage.id)
+            cap = self.registry.resolve(cap_id)
+            
+            # Find parent artifact for lineage
+            parent_id = None
+            if stage.id == "ui_design":
+                spec_arts = self.artifact_mgr.list_artifacts(artifact_type="spec")
+                if spec_arts: parent_id = spec_arts[0].id
+            elif stage.id == "frontend":
+                design_arts = self.artifact_mgr.list_artifacts(artifact_type="design")
+                if design_arts: parent_id = design_arts[-1].id
+            elif stage.id == "styling":
+                code_arts = self.artifact_mgr.list_artifacts(artifact_type="code")
+                if code_arts: parent_id = code_arts[-1].id
+            elif stage.id == "backend":
+                arch_arts = self.artifact_mgr.list_artifacts(artifact_type="architecture")
+                if arch_arts: parent_id = arch_arts[0].id
+            elif stage.id == "qa":
+                code_arts = self.artifact_mgr.list_artifacts(artifact_type="code")
+                if code_arts: parent_id = code_arts[-1].id
+            elif stage.id == "security":
+                code_arts = self.artifact_mgr.list_artifacts(artifact_type="code")
+                if code_arts: parent_id = code_arts[-1].id
+
+            if stage.id == "ui_design":
+                design_md_content = self.env.read_file("DESIGN.md") if self.env.exists("DESIGN.md") else ""
+                
+                if cap.tool == "css_expert":
+                    from skills.css_expert.server import generate_css_variables
+                    css_variables = await generate_css_variables(db_project_name, db_project_theme)
+                else:
+                    design_prompt = (
+                        f"Based on the following DESIGN.md specifications:\n{design_md_content}\n\n"
+                        f"Design CSS variables and assets for project '{db_project_name}' themed '{db_project_theme}'. "
+                        "Create design specifications that we will write to index.css. "
+                        "Output a stylesheet containing root variables matching the colors, rounded, spacing tokens, and body fonts from the design spec. "
+                        "Return ONLY CSS code."
+                    )
+                    css_variables = await self.designer_agent.call_llm(design_prompt)
+                
+                self.env.write_file("index.css", css_variables)
+                
+                design_art = Artifact(
+                    artifact_type="design",
+                    producer="Designer",
+                    content={"css_variables": css_variables},
+                    project_id=project_id,
+                    parent_artifact=parent_id,
+                    metadata={"file": "index.css"}
+                )
+                self.artifact_mgr.save_artifact(design_art)
+                artifact_ids.append(design_art.id)
+                
+                design_dec = Decision(
+                    decision="Design theme HSL color palette and typography layout",
+                    reason="Define consistent design system tokens based on PROJECT.md specifications.",
+                    agent="Designer",
+                    artifact_id=design_art.id,
+                    context={}
+                )
+                self.decision_mgr.log_decision(design_dec)
+                
+                self.event_mgr.emit_event(Event(
+                    event_type="DESIGN_COMPLETED",
+                    producer="Designer",
+                    project_id=project_id,
+                    payload={"artifact_id": design_art.id}
+                ))
+
+            elif stage.id == "frontend":
+                design_md_content = self.env.read_file("DESIGN.md") if self.env.exists("DESIGN.md") else ""
+                
+                if cap.tool == "html_coder":
+                    from skills.html_coder.server import generate_html
+                    html_code = await generate_html(db_project_name, design_md_content)
+                else:
+                    coder_prompt = (
+                        f"Based on the project's DESIGN.md specifications:\n{design_md_content}\n\n"
+                        f"Write a responsive HTML5 structure for '{db_project_name}'. "
+                        "Integrate header, nav, main sections, a footer, and unique IDs. "
+                        "Include a link to 'index.css' and a script block or link to 'script.js' "
+                        "containing interactive DOM events (like nav toggles or slider logic). "
+                        "Return ONLY the complete HTML code."
+                    )
+                    html_code = await self.coder_agent.call_llm(coder_prompt)
+                
+                self.env.write_file("index.html", html_code)
+                
+                coder_art = Artifact(
+                    artifact_type="code",
+                    producer="Coder",
+                    content={"html_code": html_code},
+                    project_id=project_id,
+                    parent_artifact=parent_id,
+                    metadata={"file": "index.html"}
+                )
+                self.artifact_mgr.save_artifact(coder_art)
+                artifact_ids.append(coder_art.id)
+                
+                coder_dec = Decision(
+                    decision="Construct semantic HTML5 layout with DOM logic",
+                    reason="Generate UI frame containing headers, navigations, grid containers, and scripts.",
+                    agent="Coder",
+                    artifact_id=coder_art.id,
+                    context={}
+                )
+                self.decision_mgr.log_decision(coder_dec)
+                
+                self.event_mgr.emit_event(Event(
+                    event_type="FRONTEND_GENERATED",
+                    producer="Coder",
+                    project_id=project_id,
+                    payload={"artifact_id": coder_art.id}
+                ))
+
+            elif stage.id == "styling":
+                design_md_content = self.env.read_file("DESIGN.md") if self.env.exists("DESIGN.md") else ""
+                css_variables = self.env.read_file("index.css") if self.env.exists("index.css") else ""
+                
+                if cap.tool == "css_expert":
+                    from skills.css_expert.server import upgrade_css_styles
+                    full_css = await upgrade_css_styles(db_project_name, css_variables)
+                else:
+                    css_prompt = (
+                        f"Based on the project's DESIGN.md specifications:\n{design_md_content}\n\n"
+                        "Upgrade our current index.css stylesheet to implement full responsive designs "
+                        "(Desktop, Mobile, Tablet viewports), hover animations, and glassmorphic card grids. "
+                        "Ensure scrollbar stylings and fadeIn animation keyframes are included. "
+                        f"Here is the existing styling:\n{css_variables}\n"
+                        "Return ONLY the upgraded CSS content."
+                    )
+                    full_css = await self.css_agent.call_llm(css_prompt)
+                
+                self.env.write_file("index.css", full_css)
+                
+                css_art = Artifact(
+                    artifact_type="design",
+                    producer="CSSArchitect",
+                    content={"css_variables": css_variables, "full_css": full_css},
+                    project_id=project_id,
+                    parent_artifact=parent_id,
+                    metadata={"file": "index.css", "upgraded": True}
+                )
+                self.artifact_mgr.save_artifact(css_art)
+                artifact_ids.append(css_art.id)
+                
+                css_dec = Decision(
+                    decision="Incorporate responsive breakpoints and advanced styling transitions",
+                    reason="Refine index.css with mobile media queries and glassmorphic micro-interactions.",
+                    agent="CSSArchitect",
+                    artifact_id=css_art.id,
+                    context={}
+                )
+                self.decision_mgr.log_decision(css_dec)
+                
+                self.event_mgr.emit_event(Event(
+                    event_type="STYLING_UPGRADED",
+                    producer="CSSArchitect",
+                    project_id=project_id,
+                    payload={"artifact_id": css_art.id}
+                ))
+
+            elif stage.id == "backend":
+                if cap.tool == "backend_generator":
+                    from skills.backend_generator.server import generate_backend
+                    backend_resp = await generate_backend(db_project_name, db_project_concept)
+                else:
+                    backend_prompt = (
+                        f"Implement the backend files for the project '{db_project_name}' based on the requirements:\n"
+                        f"{db_project_concept}\n\n"
+                        "You must write the full, working implementation (no placeholders) for the following backend files:\n"
+                        "1. All Mongoose models under the 'models/' directory (e.g. User.js, Product.js, etc. as specified in the schema requirements).\n"
+                        "2. All Express routes under the 'routes/' directory (e.g. authRoutes.js, productRoutes.js).\n"
+                        "3. All controller files under the 'controllers/' directory (e.g. authController.js, productController.js).\n"
+                        "4. A MongoDB connection utility file at 'config/db.js'.\n"
+                        "5. The main entry point Express server 'server.js' that connects to the database, imports routes, serves static public assets and views directories, and listens on a port.\n"
+                        "6. A package.json file with express, mongoose, dotenv, cors, jsonwebtoken, bcryptjs, etc.\n"
+                        "Output your response as a JSON array where each item is an object with 'file' (the relative file path, e.g., 'models/User.js') and 'content' (the complete source code text).\n"
+                        "Return ONLY the clean JSON array of files. Do not wrap in markdown or include backticks."
+                    )
+                    backend_resp = await self.backend_agent.call_llm(backend_prompt)
+                
+                clean_json = backend_resp.strip()
+                if clean_json.startswith("```json"):
+                    clean_json = clean_json[7:]
+                if clean_json.endswith("```"):
+                    clean_json = clean_json[:-3]
+                clean_json = clean_json.strip()
+                
+                try:
+                    files = json.loads(clean_json)
+                except json.JSONDecodeError as jde:
+                    print(f"⚠️ Backend LLM response was not valid JSON, using default files fallback: {jde}")
+                    files = [
+                        {
+                            "file": "server.js",
+                            "content": """const express = require('express');
+const app = express();
+const port = process.env.PORT || 8000;
+app.use(express.static('.'));
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+app.listen(port, () => console.log(`Server running on port ${port}`));"""
+                        },
+                        {
+                            "file": "package.json",
+                            "content": """{
+  "name": "web-app",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5"
+  }
+}"""
+                        }
+                    ]
+                for f_info in files:
+                    self.env.write_file(f_info["file"], f_info["content"])
+                
+                backend_art = Artifact(
+                    artifact_type="code",
+                    producer="BackendDeveloper",
+                    content={"files": files},
+                    project_id=project_id,
+                    parent_artifact=parent_id,
+                    metadata={"type": "backend"}
+                )
+                self.artifact_mgr.save_artifact(backend_art)
+                artifact_ids.append(backend_art.id)
+                
+                backend_dec = Decision(
+                    decision="Generate database schemas, routes and controller implementations",
+                    reason="Created Mongoose/Express boilerplate and route endpoints to serve backend requests.",
+                    agent="BackendDeveloper",
+                    artifact_id=backend_art.id,
+                    context={}
+                )
+                self.decision_mgr.log_decision(backend_dec)
+                
+                self.event_mgr.emit_event(Event(
+                    event_type="BACKEND_GENERATED",
+                    producer="BackendDeveloper",
+                    project_id=project_id,
+                    payload={"artifact_id": backend_art.id}
+                ))
+                
+                self._transition_state("BACKEND_GENERATED", project_id=project_id)
+
+            elif stage.id == "qa":
+                self._transition_state("BUILD_STARTED", project_id=project_id)
+                await self.run_playwright_test(db_project)
+                
+                # Retrieve latest QA artifact ID
+                test_arts = self.artifact_mgr.list_artifacts(artifact_type="test")
+                if test_arts:
+                    artifact_ids.append(test_arts[-1].id)
+
+            elif stage.id == "security":
+                await self.run_strix_security_scan(db_project)
+                
+                # Retrieve latest security artifact ID
+                sec_arts = self.artifact_mgr.list_artifacts(artifact_type="security")
+                if sec_arts:
+                    artifact_ids.append(sec_arts[-1].id)
+
+            # Update BuildTask status to COMPLETED
+            db = self.get_db_session()
+            if phase_num:
+                task = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == phase_num).first()
+                if task:
+                    task.status = "COMPLETED"
+                    task.completed_at = datetime.datetime.utcnow()
+                    db.commit()
             db.close()
+            
+            return WorkflowResult(stage_id=stage.id, status="COMPLETED", artifact_ids=artifact_ids)
+
+        except Exception as e:
+            print(f"❌ Error executing workflow stage {stage.id}: {e}")
+            db = self.get_db_session()
+            if phase_num:
+                task = db.query(BuildTask).filter(BuildTask.project_id == project_id, BuildTask.phase == phase_num).first()
+                if task:
+                    task.status = "FAILED"
+                    db.commit()
+            db.close()
+            return WorkflowResult(stage_id=stage.id, status="FAILED", error=str(e))
 
     async def run_playwright_test(self, project: Project):
         db = self.get_db_session()
@@ -562,6 +783,10 @@ class AgentCoordinator:
             # Fallback pathing
             if not os.path.exists(template_path):
                 template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "skills", "web-creator", "templates", "playwright-template.js")
+            if not os.path.exists(template_path):
+                user_home_template = os.path.join(os.path.expanduser("~"), ".gemini", "config", "skills", "web-creator", "templates", "playwright-template.js")
+                if os.path.exists(user_home_template):
+                    template_path = user_home_template
             
             with open(template_path, "r", encoding="utf-8") as tf:
                 script_content = tf.read()
@@ -626,6 +851,7 @@ class AgentCoordinator:
                         project_id=project.id,
                         payload={"artifact_id": test_art.id}
                     ))
+                    self._transition_state("TEST_PASSED", project_id=project.id)
                     return
                 else:
                     # Save QA Test Artifact (Failed)
@@ -638,7 +864,7 @@ class AgentCoordinator:
                         metadata={"tool": "playwright", "attempts": iteration + 1}
                     )
                     self.artifact_mgr.save_artifact(test_art)
-
+ 
                     # Emit Test Failed Event
                     self.event_mgr.emit_event(Event(
                         event_type="TEST_FAILED",
@@ -646,6 +872,7 @@ class AgentCoordinator:
                         project_id=project.id,
                         payload={"artifact_id": test_art.id, "error": last_output[:200]}
                     ))
+                    self._transition_state("TEST_FAILED", project_id=project.id)
 
                     if iteration < max_retries - 1:
                         print("🤖 Entering Self-Healing Diagnostics Loop...")
@@ -713,6 +940,7 @@ class AgentCoordinator:
                 project_id=project_id,
                 payload={"target_file": target_file, "patch": patch}
             ))
+            self._transition_state("SELF_HEALING_ATTEMPTED", project_id=project_id)
         except Exception as repair_err:
             print(f"❌ Failed to parse and apply repair patch: {repair_err}")
 

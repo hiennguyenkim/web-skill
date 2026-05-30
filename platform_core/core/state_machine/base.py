@@ -262,6 +262,12 @@ class StateMachine:
             "history": self._history,
         }
 
+    def reset(self, initial: ProjectState = ProjectState.CREATED) -> None:
+        """Reset the state machine back to its initial state and clear history."""
+        self._current = initial
+        self._history = []
+        self._persist()
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
